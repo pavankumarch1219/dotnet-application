@@ -15,12 +15,15 @@ variables:
 
 stages:
 
-# ---------------- BUILD STAGE ----------------
+# ================= BUILD STAGE =================
 
 - stage: Build
   displayName: Build .NET Application
+
   jobs:
-  - job: BuildDotnet
+  - job: BuildJob
+    displayName: Restore and Build
+
     steps:
 
     - task: UseDotNet@2
@@ -29,52 +32,57 @@ stages:
         version: '8.x'
 
     - script: |
-        echo "Restoring dependencies"
+        echo "Restoring dependencies..."
         dotnet restore
 
-        echo "Building project"
+        echo "Building application..."
         dotnet build --configuration Release
-      displayName: Restore & Build Project
+      displayName: Build Project
 
 
-# ---------------- DOCKER BUILD STAGE ----------------
+# ================= DOCKER BUILD STAGE =================
 
 - stage: DockerBuild
   displayName: Build and Push Docker Image
   dependsOn: Build
+
   jobs:
-  - job: DockerBuild
+  - job: DockerJob
+    displayName: Docker Build and Push
+
     steps:
 
     - script: |
-        echo "Building Docker Image"
+        echo "Building Docker Image..."
         docker build -t $(dockerHubRepo):$(imageTag) .
-      displayName: Build Docker Image
+      displayName: Docker Build
 
     - script: |
-        echo "Logging into DockerHub"
+        echo "Login to DockerHub"
         docker login -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
 
-        echo "Pushing Docker Image"
+        echo "Push image to DockerHub"
         docker push $(dockerHubRepo):$(imageTag)
-      displayName: Push Docker Image
+      displayName: Docker Push
 
 
-# ---------------- DEPLOY TO KUBERNETES ----------------
+# ================= DEPLOY STAGE =================
 
 - stage: Deploy
   displayName: Deploy to Kubernetes
   dependsOn: DockerBuild
+
   jobs:
-  - job: DeployToK8s
+  - job: DeployJob
+    displayName: Kubernetes Deployment
+
     steps:
 
     - script: |
-        echo "Updating Kubernetes Deployment"
+        echo "Updating Kubernetes Deployment..."
 
-        kubectl set image deployment/dotnet-app \
-        dotnet-app=$(dockerHubRepo):$(imageTag)
+        kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo):$(imageTag)
 
-        echo "Deployment updated successfully"
-      displayName: Deploy to Kubernetes
-```
+        echo "Checking rollout status..."
+        kubectl rollout status deployment/dotnet-app
+      displayName: Deploy Application
