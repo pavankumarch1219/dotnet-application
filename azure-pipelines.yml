@@ -15,7 +15,7 @@ variables:
 
 stages:
 
-# ---------- BUILD STAGE ----------
+# ---------------- BUILD STAGE ----------------
 
 - stage: Build
   displayName: Build .NET Application
@@ -28,19 +28,19 @@ stages:
 
     - task: UseDotNet@2
       inputs:
-        packageType: 'sdk'
-        version: '10.0.x'
+        packageType: sdk
+        version: 10.0.x
 
     - script: |
         echo "Restoring dependencies"
-        dotnet restore
+        dotnet restore src/eShop.Web/eShop.Web.csproj
 
         echo "Building application"
-        dotnet build --configuration Release
+        dotnet build src/eShop.Web/eShop.Web.csproj --configuration Release --no-restore
       displayName: Build Project
 
 
-# ---------- DOCKER BUILD ----------
+# ---------------- DOCKER BUILD ----------------
 
 - stage: DockerBuild
   displayName: Build and Push Docker Image
@@ -48,6 +48,7 @@ stages:
 
   jobs:
   - job: DockerJob
+    displayName: Docker Build and Push
 
     steps:
 
@@ -65,7 +66,7 @@ stages:
       displayName: Docker Push
 
 
-# ---------- DEPLOY ----------
+# ---------------- DEPLOY STAGE ----------------
 
 - stage: Deploy
   displayName: Deploy to Kubernetes
@@ -73,14 +74,15 @@ stages:
 
   jobs:
   - job: DeployJob
+    displayName: Deploy to K8s
 
     steps:
 
     - script: |
-        echo "Deploying to Kubernetes"
+        echo "Updating Kubernetes Deployment"
 
         kubectl set image deployment/dotnet-app \
         dotnet-app=$(dockerHubRepo):$(imageTag)
 
         kubectl rollout status deployment/dotnet-app
-      displayName: Deploy to K8s
+      displayName: Deploy to Kubernetes
