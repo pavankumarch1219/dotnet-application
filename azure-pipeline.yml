@@ -1,0 +1,58 @@
+trigger:
+- main
+
+pool:
+  name: Default
+
+variables:
+  dockerHubRepo: pavankumarch1219/dotnet-application
+  imageTag: $(Build.BuildId)
+
+stages:
+
+# ---------------- BUILD STAGE ----------------
+
+- stage: Build
+  jobs:
+  - job: BuildDotnet
+    steps:
+
+    - task: UseDotNet@2
+      inputs:
+        packageType: 'sdk'
+        version: '8.x'
+
+    - script: |
+        dotnet restore
+        dotnet build --configuration Release
+      displayName: Build .NET Project
+
+# ---------------- DOCKER BUILD ----------------
+
+- stage: DockerBuild
+  dependsOn: Build
+  jobs:
+  - job: Docker
+    steps:
+
+    - script: |
+        docker build -t $(dockerHubRepo):$(imageTag) .
+      displayName: Build Docker Image
+
+    - script: |
+        docker login -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
+        docker push $(dockerHubRepo):$(imageTag)
+      displayName: Push Image to DockerHub
+
+# ---------------- DEPLOY TO KUBERNETES ----------------
+
+- stage: Deploy
+  dependsOn: DockerBuild
+  jobs:
+  - job: DeployK8s
+    steps:
+
+    - script: |
+        kubectl set image deployment/dotnet-app \
+        dotnet-app=$(dockerHubRepo):$(imageTag)
+      displayName: Update Kubernetes Deployment
