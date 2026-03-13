@@ -15,7 +15,7 @@ variables:
 
 stages:
 
-# ================= BUILD STAGE =================
+# ---------- BUILD STAGE ----------
 
 - stage: Build
   displayName: Build .NET Application
@@ -29,18 +29,18 @@ stages:
     - task: UseDotNet@2
       inputs:
         packageType: 'sdk'
-        version: '8.x'
+        version: '10.0.x'
 
     - script: |
-        echo "Restoring dependencies..."
+        echo "Restoring dependencies"
         dotnet restore
 
-        echo "Building application..."
+        echo "Building application"
         dotnet build --configuration Release
       displayName: Build Project
 
 
-# ================= DOCKER BUILD STAGE =================
+# ---------- DOCKER BUILD ----------
 
 - stage: DockerBuild
   displayName: Build and Push Docker Image
@@ -48,12 +48,11 @@ stages:
 
   jobs:
   - job: DockerJob
-    displayName: Docker Build and Push
 
     steps:
 
     - script: |
-        echo "Building Docker Image..."
+        echo "Building Docker Image"
         docker build -t $(dockerHubRepo):$(imageTag) .
       displayName: Docker Build
 
@@ -61,12 +60,12 @@ stages:
         echo "Login to DockerHub"
         docker login -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
 
-        echo "Push image to DockerHub"
+        echo "Push Image"
         docker push $(dockerHubRepo):$(imageTag)
       displayName: Docker Push
 
 
-# ================= DEPLOY STAGE =================
+# ---------- DEPLOY ----------
 
 - stage: Deploy
   displayName: Deploy to Kubernetes
@@ -74,15 +73,14 @@ stages:
 
   jobs:
   - job: DeployJob
-    displayName: Kubernetes Deployment
 
     steps:
 
     - script: |
-        echo "Updating Kubernetes Deployment..."
+        echo "Deploying to Kubernetes"
 
-        kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo):$(imageTag)
+        kubectl set image deployment/dotnet-app \
+        dotnet-app=$(dockerHubRepo):$(imageTag)
 
-        echo "Checking rollout status..."
         kubectl rollout status deployment/dotnet-app
-      displayName: Deploy Application
+      displayName: Deploy to K8s
