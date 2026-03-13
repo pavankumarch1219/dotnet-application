@@ -2,17 +2,23 @@ trigger:
 - main
 
 pool:
-  name: Default
+  name: agent-vayu
 
 variables:
-  dockerHubRepo: pavankumarch1219/dotnet-application
-  imageTag: $(Build.BuildId)
+- group: docker-credentials
+
+- name: dockerHubRepo
+  value: pavankumarch1219/dotnet-application
+
+- name: imageTag
+  value: $(Build.BuildId)
 
 stages:
 
 # ---------------- BUILD STAGE ----------------
 
 - stage: Build
+  displayName: Build .NET Application
   jobs:
   - job: BuildDotnet
     steps:
@@ -23,36 +29,52 @@ stages:
         version: '8.x'
 
     - script: |
+        echo "Restoring dependencies"
         dotnet restore
-        dotnet build --configuration Release
-      displayName: Build .NET Project
 
-# ---------------- DOCKER BUILD ----------------
+        echo "Building project"
+        dotnet build --configuration Release
+      displayName: Restore & Build Project
+
+
+# ---------------- DOCKER BUILD STAGE ----------------
 
 - stage: DockerBuild
+  displayName: Build and Push Docker Image
   dependsOn: Build
   jobs:
-  - job: Docker
+  - job: DockerBuild
     steps:
 
     - script: |
+        echo "Building Docker Image"
         docker build -t $(dockerHubRepo):$(imageTag) .
       displayName: Build Docker Image
 
     - script: |
+        echo "Logging into DockerHub"
         docker login -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
+
+        echo "Pushing Docker Image"
         docker push $(dockerHubRepo):$(imageTag)
-      displayName: Push Image to DockerHub
+      displayName: Push Docker Image
+
 
 # ---------------- DEPLOY TO KUBERNETES ----------------
 
 - stage: Deploy
+  displayName: Deploy to Kubernetes
   dependsOn: DockerBuild
   jobs:
-  - job: DeployK8s
+  - job: DeployToK8s
     steps:
 
     - script: |
+        echo "Updating Kubernetes Deployment"
+
         kubectl set image deployment/dotnet-app \
         dotnet-app=$(dockerHubRepo):$(imageTag)
-      displayName: Update Kubernetes Deployment
+
+        echo "Deployment updated successfully"
+      displayName: Deploy to Kubernetes
+```
