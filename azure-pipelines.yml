@@ -33,10 +33,10 @@ stages:
 
     - script: |
         echo "Restoring dependencies"
-        dotnet restore src/eShop.Web/eShop.Web.csproj
+        dotnet restore src/WebApp/WebApp.csproj
 
         echo "Building application"
-        dotnet build src/eShop.Web/eShop.Web.csproj --configuration Release --no-restore
+        dotnet build src/WebApp/WebApp.csproj --configuration Release --no-restore
       displayName: Build Project
 
 
