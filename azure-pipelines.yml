@@ -79,10 +79,22 @@ stages:
     steps:
 
     - script: |
-        echo "Updating Kubernetes Deployment"
+        echo "Checking Kubernetes deployment..."
 
-        kubectl set image deployment/dotnet-app \
-        dotnet-app=$(dockerHubRepo):$(imageTag)
+        if kubectl get deployment dotnet-app; then
+          echo "Deployment exists, updating image..."
+          kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo):$(imageTag)
+        else
+          echo "Deployment not found, creating deployment..."
+          kubectl create deployment dotnet-app --image=$(dockerHubRepo):$(imageTag)
 
+          kubectl expose deployment dotnet-app \
+            --type=NodePort \
+            --port=80 \
+            --target-port=80
+        fi
+
+        echo "Waiting for rollout..."
         kubectl rollout status deployment/dotnet-app
+
       displayName: Deploy to Kubernetes
