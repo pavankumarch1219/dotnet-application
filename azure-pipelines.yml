@@ -1,10 +1,11 @@
-trigger: none
+trigger:
 - main
 
 pool:
   name: agent-vayu
 
 variables:
+
 - group: docker-credentials
 
 - name: dockerHubRepo
@@ -22,7 +23,6 @@ stages:
 
   jobs:
   - job: BuildJob
-    displayName: Restore and Build
 
     steps:
 
@@ -48,22 +48,20 @@ stages:
 
   jobs:
   - job: DockerJob
-    displayName: Docker Build and Push
 
     steps:
-
-    - script: |
-        echo "Building Docker Image"
-        docker build -t $(dockerHubRepo):$(imageTag) .
-      displayName: Docker Build
 
     - script: |
         echo "Login to DockerHub"
         docker login -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
 
+        echo "Building Docker Image"
+        docker build -t $(dockerHubRepo):$(imageTag) .
+
         echo "Push Image"
         docker push $(dockerHubRepo):$(imageTag)
-      displayName: Docker Push
+
+      displayName: Docker Build and Push
 
 
 # ---------------- DEPLOY STAGE ----------------
@@ -74,27 +72,24 @@ stages:
 
   jobs:
   - job: DeployJob
-    displayName: Deploy to K8s
 
     steps:
 
     - script: |
-        echo "Checking Kubernetes deployment..."
 
-        if kubectl get deployment dotnet-app; then
-          echo "Deployment exists, updating image..."
-          kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo):$(imageTag)
-        else
-          echo "Deployment not found, creating deployment..."
-          kubectl create deployment dotnet-app --image=$(dockerHubRepo):$(imageTag)
+        echo "Applying Kubernetes manifests"
 
-          kubectl expose deployment dotnet-app \
-            --type=NodePort \
-            --port=80 \
-            --target-port=80
-        fi
+        kubectl apply -f k8s/configmap.yaml
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/service.yaml
 
-        echo "Waiting for rollout..."
+        echo "Updating image"
+
+        kubectl set image deployment/dotnet-app \
+        dotnet-app=$(dockerHubRepo):$(imageTag)
+
+        echo "Waiting for rollout"
+
         kubectl rollout status deployment/dotnet-app
 
       displayName: Deploy to Kubernetes
