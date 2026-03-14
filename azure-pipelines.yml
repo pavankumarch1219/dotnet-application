@@ -6,8 +6,10 @@ pool:
 
 variables:
 - group: docker-credentials
+
 - name: dockerHubRepo
-  value: pavankumarch1219/dotnet-application
+  value: pavankumarch1219
+
 - name: imageTag
   value: $(Build.BuildId)
 
@@ -39,7 +41,7 @@ stages:
 # ---------------- DOCKER BUILD ----------------
 
 - stage: DockerBuild
-  displayName: Build and Push Docker Image
+  displayName: Build and Push Docker Images
   dependsOn: Build
 
   jobs:
@@ -50,12 +52,26 @@ stages:
         echo "Login to DockerHub"
         docker login -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
 
-        echo "Building Docker Image"
-        docker build -t $(dockerHubRepo):$(imageTag) .
+        echo "Build WebApp"
+        docker build -t $(dockerHubRepo)/dotnet-application:$(imageTag) -f src/WebApp/Dockerfile .
+        docker push $(dockerHubRepo)/dotnet-application:$(imageTag)
 
-        echo "Push Image"
-        docker push $(dockerHubRepo):$(imageTag)
-      displayName: Docker Build and Push
+        echo "Build Catalog API"
+        docker build -t $(dockerHubRepo)/catalog-api:latest -f src/Catalog.API/Dockerfile .
+        docker push $(dockerHubRepo)/catalog-api:latest
+
+        echo "Build Basket API"
+        docker build -t $(dockerHubRepo)/basket-api:latest -f src/Basket.API/Dockerfile .
+        docker push $(dockerHubRepo)/basket-api:latest
+
+        echo "Build Identity API"
+        docker build -t $(dockerHubRepo)/identity-api:latest -f src/Identity.API/Dockerfile .
+        docker push $(dockerHubRepo)/identity-api:latest
+
+        echo "Build Ordering API"
+        docker build -t $(dockerHubRepo)/ordering-api:latest -f src/Ordering.API/Dockerfile .
+        docker push $(dockerHubRepo)/ordering-api:latest
+      displayName: Build and Push Images
 
 
 # ---------------- DEPLOY STAGE ----------------
@@ -69,21 +85,16 @@ stages:
 
     steps:
     - script: |
-        echo "Deploying all microservices"
-
+        echo "Applying Kubernetes manifests"
         kubectl apply -f k8s/
 
-        echo "Updating web app image"
-
-        kubectl set image deployment/dotnet-app \
-        dotnet-app=$(dockerHubRepo):$(imageTag)
+        echo "Updating WebApp image"
+        kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo)/dotnet-application:$(imageTag)
 
         echo "Waiting for rollout"
-
         kubectl rollout status deployment/dotnet-app
 
-        echo "Deployment completed"
-
+        echo "Cluster status"
         kubectl get pods
         kubectl get svc
       displayName: Deploy to Kubernetes
