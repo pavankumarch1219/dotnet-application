@@ -1,9 +1,20 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+# ---------- BUILD STAGE ----------
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY . .
-RUN dotnet publish src/eShop.AppHost/eShop.AppHost.csproj -c Release -o /app
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
+# Copy source
+COPY . .
+
+# Restore and publish WebApp
+RUN dotnet publish src/WebApp/WebApp.csproj -c Release -o /app/publish
+
+
+# ---------- RUNTIME STAGE ----------
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
-COPY --from=build /app .
-ENTRYPOINT ["dotnet","eShop.AppHost.dll"]
+
+COPY --from=build /app/publish .
+
+EXPOSE 80
+
+ENTRYPOINT ["dotnet", "WebApp.dll"]
