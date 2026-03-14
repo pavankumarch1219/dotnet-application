@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+
+metadata:
+  name: eshop-config
+
+data:
+  IdentityUrl: http://identity-api
+  CatalogUrl: http://catalog-api
+  BasketUrl: http://basket-api
+  OrderingUrl: http://ordering-api
