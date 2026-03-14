@@ -1,16 +1,13 @@
-trigger: none
+trigger:
 - main
 
 pool:
   name: agent-vayu
 
 variables:
-
 - group: docker-credentials
-
 - name: dockerHubRepo
   value: pavankumarch1219/dotnet-application
-
 - name: imageTag
   value: $(Build.BuildId)
 
@@ -25,7 +22,6 @@ stages:
   - job: BuildJob
 
     steps:
-
     - task: UseDotNet@2
       inputs:
         packageType: sdk
@@ -50,7 +46,6 @@ stages:
   - job: DockerJob
 
     steps:
-
     - script: |
         echo "Login to DockerHub"
         docker login -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
@@ -60,7 +55,6 @@ stages:
 
         echo "Push Image"
         docker push $(dockerHubRepo):$(imageTag)
-
       displayName: Docker Build and Push
 
 
@@ -74,16 +68,12 @@ stages:
   - job: DeployJob
 
     steps:
-
     - script: |
+        echo "Deploying all microservices"
 
-        echo "Applying Kubernetes manifests"
+        kubectl apply -f k8s/
 
-        kubectl apply -f k8s/configmap.yaml
-        kubectl apply -f k8s/deployment.yaml
-        kubectl apply -f k8s/service.yaml
-
-        echo "Updating image"
+        echo "Updating web app image"
 
         kubectl set image deployment/dotnet-app \
         dotnet-app=$(dockerHubRepo):$(imageTag)
@@ -92,4 +82,8 @@ stages:
 
         kubectl rollout status deployment/dotnet-app
 
+        echo "Deployment completed"
+
+        kubectl get pods
+        kubectl get svc
       displayName: Deploy to Kubernetes
