@@ -11,6 +11,6 @@ spec:
     app: dotnet-app
 
   ports:
-  - port: 80
-    targetPort: 8080
-    nodePort: 32289
+    - port: 80
+      targetPort: 8081
+      nodePort: 32289
