@@ -36,5 +36,8 @@ spec:
         - name: OrderingUrl
           value: http://ordering-api
 
+        - name: EventBusConnection
+          value: rabbitmq
+
         - name: CallBackUrl
           value: http://20.29.210.83:32289
