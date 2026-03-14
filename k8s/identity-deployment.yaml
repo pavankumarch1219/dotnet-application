@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: identity-api
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: identity-api
+
+  template:
+    metadata:
+      labels:
+        app: identity-api
+
+    spec:
+      containers:
+      - name: identity-api
+        image: pavankumarch1219/identity-api:latest
+        ports:
+        - containerPort: 8080
