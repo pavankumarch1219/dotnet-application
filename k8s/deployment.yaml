@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dotnet-app
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: dotnet-app
+
+  template:
+    metadata:
+      labels:
+        app: dotnet-app
+
+    spec:
+      containers:
+      - name: dotnet-app
+        image: pavankumarch1219/dotnet-application:latest
+
+        ports:
+        - containerPort: 8080
+
+        env:
+        - name: IdentityUrl
+          value: http://identity-api
+
+        - name: CatalogUrl
+          value: http://catalog-api
+
+        - name: BasketUrl
+          value: http://basket-api
+
+        - name: OrderingUrl
+          value: http://ordering-api
+
+        - name: CallBackUrl
+          value: http://20.29.210.83:32289
