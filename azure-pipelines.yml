@@ -42,20 +42,21 @@ stages:
         echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 
         echo "Build Catalog API"
-        docker build -t $(dockerHubRepo)/catalog-api:$(imageTag) -f src/Catalog.API/Dockerfile src/Catalog.API
+        docker build -t $(dockerHubRepo)/catalog-api:$(imageTag) -f src/Catalog.API/Dockerfile .
         docker push $(dockerHubRepo)/catalog-api:$(imageTag)
 
         echo "Build Basket API"
-        docker build -t $(dockerHubRepo)/basket-api:$(imageTag) -f src/Basket.API/Dockerfile src/Basket.API
+        docker build -t $(dockerHubRepo)/basket-api:$(imageTag) -f src/Basket.API/Dockerfile .
         docker push $(dockerHubRepo)/basket-api:$(imageTag)
 
         echo "Build Identity API"
-        docker build -t $(dockerHubRepo)/identity-api:$(imageTag) -f src/Identity.API/Dockerfile src/Identity.API
+        docker build -t $(dockerHubRepo)/identity-api:$(imageTag) -f src/Identity.API/Dockerfile .
         docker push $(dockerHubRepo)/identity-api:$(imageTag)
 
         echo "Build Ordering API"
-        docker build -t $(dockerHubRepo)/ordering-api:$(imageTag) -f src/Ordering.API/Dockerfile src/Ordering.API
+        docker build -t $(dockerHubRepo)/ordering-api:$(imageTag) -f src/Ordering.API/Dockerfile .
         docker push $(dockerHubRepo)/ordering-api:$(imageTag)
+
       displayName: Build & Push Images
 
 
@@ -66,18 +67,23 @@ stages:
   - job: DeployJob
     steps:
     - script: |
+        echo "Apply Kubernetes manifests"
         kubectl apply -f k8s/
 
+        echo "Update images"
         kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag)
         kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag)
         kubectl set image deployment/identity-api identity-api=$(dockerHubRepo)/identity-api:$(imageTag)
         kubectl set image deployment/ordering-api ordering-api=$(dockerHubRepo)/ordering-api:$(imageTag)
 
+        echo "Wait for rollout"
         kubectl rollout status deployment/catalog-api
         kubectl rollout status deployment/basket-api
         kubectl rollout status deployment/identity-api
         kubectl rollout status deployment/ordering-api
 
+        echo "Cluster status"
         kubectl get pods
         kubectl get svc
+
       displayName: Deploy to Kubernetes
