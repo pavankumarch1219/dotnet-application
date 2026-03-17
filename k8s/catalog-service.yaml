@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: catalog-service
+  name: basket-service
 spec:
   selector:
-    app: catalog-api
+    app: basket-api
   ports:
     - port: 80
       targetPort: 80
