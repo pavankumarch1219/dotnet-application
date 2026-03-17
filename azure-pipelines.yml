@@ -50,27 +50,27 @@ stages:
     steps:
     - script: |
         echo "Login to DockerHub"
-        docker login -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
+        echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 
         echo "Build WebApp"
-        docker build -t $(dockerHubRepo)/dotnet-application:$(imageTag) -f src/WebApp/Dockerfile .
+        docker build -t $(dockerHubRepo)/dotnet-application:$(imageTag) -f Dockerfile .
         docker push $(dockerHubRepo)/dotnet-application:$(imageTag)
 
         echo "Build Catalog API"
-        docker build -t $(dockerHubRepo)/catalog-api:latest -f src/Catalog.API/Dockerfile .
-        docker push $(dockerHubRepo)/catalog-api:latest
+        docker build -t $(dockerHubRepo)/catalog-api:$(imageTag) -f src/Catalog.API/Dockerfile src/Catalog.API
+        docker push $(dockerHubRepo)/catalog-api:$(imageTag)
 
         echo "Build Basket API"
-        docker build -t $(dockerHubRepo)/basket-api:latest -f src/Basket.API/Dockerfile .
-        docker push $(dockerHubRepo)/basket-api:latest
+        docker build -t $(dockerHubRepo)/basket-api:$(imageTag) -f src/Basket.API/Dockerfile src/Basket.API
+        docker push $(dockerHubRepo)/basket-api:$(imageTag)
 
         echo "Build Identity API"
-        docker build -t $(dockerHubRepo)/identity-api:latest -f src/Identity.API/Dockerfile .
-        docker push $(dockerHubRepo)/identity-api:latest
+        docker build -t $(dockerHubRepo)/identity-api:$(imageTag) -f src/Identity.API/Dockerfile src/Identity.API
+        docker push $(dockerHubRepo)/identity-api:$(imageTag)
 
         echo "Build Ordering API"
-        docker build -t $(dockerHubRepo)/ordering-api:latest -f src/Ordering.API/Dockerfile .
-        docker push $(dockerHubRepo)/ordering-api:latest
+        docker build -t $(dockerHubRepo)/ordering-api:$(imageTag) -f src/Ordering.API/Dockerfile src/Ordering.API
+        docker push $(dockerHubRepo)/ordering-api:$(imageTag)
       displayName: Build and Push Images
 
 
@@ -85,14 +85,22 @@ stages:
 
     steps:
     - script: |
-        echo "Applying Kubernetes manifests"
+        echo "Apply Kubernetes manifests"
         kubectl apply -f k8s/
 
-        echo "Updating WebApp image"
-        kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo)/dotnet-application:$(imageTag)
+        echo "Update images in deployments"
+
+        kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag)
+        kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag)
+        kubectl set image deployment/identity-api identity-api=$(dockerHubRepo)/identity-api:$(imageTag)
+        kubectl set image deployment/ordering-api ordering-api=$(dockerHubRepo)/ordering-api:$(imageTag)
 
         echo "Waiting for rollout"
-        kubectl rollout status deployment/dotnet-app
+
+        kubectl rollout status deployment/catalog-api
+        kubectl rollout status deployment/basket-api
+        kubectl rollout status deployment/identity-api
+        kubectl rollout status deployment/ordering-api
 
         echo "Cluster status"
         kubectl get pods
