@@ -15,14 +15,10 @@ variables:
 
 stages:
 
-# ---------------- BUILD STAGE ----------------
-
+# ---------------- BUILD ----------------
 - stage: Build
-  displayName: Build .NET Application
-
   jobs:
   - job: BuildJob
-
     steps:
     - task: UseDotNet@2
       inputs:
@@ -30,31 +26,20 @@ stages:
         version: 10.0.x
 
     - script: |
-        echo "Restoring dependencies"
         dotnet restore src/WebApp/WebApp.csproj
-
-        echo "Building application"
         dotnet build src/WebApp/WebApp.csproj --configuration Release --no-restore
       displayName: Build Project
 
 
 # ---------------- DOCKER BUILD ----------------
-
 - stage: DockerBuild
-  displayName: Build and Push Docker Images
   dependsOn: Build
-
   jobs:
   - job: DockerJob
-
     steps:
     - script: |
         echo "Login to DockerHub"
         echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
-
-        echo "Build WebApp"
-        docker build -t $(dockerHubRepo)/dotnet-application:$(imageTag) -f Dockerfile .
-        docker push $(dockerHubRepo)/dotnet-application:$(imageTag)
 
         echo "Build Catalog API"
         docker build -t $(dockerHubRepo)/catalog-api:$(imageTag) -f src/Catalog.API/Dockerfile src/Catalog.API
@@ -71,38 +56,28 @@ stages:
         echo "Build Ordering API"
         docker build -t $(dockerHubRepo)/ordering-api:$(imageTag) -f src/Ordering.API/Dockerfile src/Ordering.API
         docker push $(dockerHubRepo)/ordering-api:$(imageTag)
-      displayName: Build and Push Images
+      displayName: Build & Push Images
 
 
-# ---------------- DEPLOY STAGE ----------------
-
+# ---------------- DEPLOY ----------------
 - stage: Deploy
-  displayName: Deploy to Kubernetes
   dependsOn: DockerBuild
-
   jobs:
   - job: DeployJob
-
     steps:
     - script: |
-        echo "Apply Kubernetes manifests"
         kubectl apply -f k8s/
-
-        echo "Update images in deployments"
 
         kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag)
         kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag)
         kubectl set image deployment/identity-api identity-api=$(dockerHubRepo)/identity-api:$(imageTag)
         kubectl set image deployment/ordering-api ordering-api=$(dockerHubRepo)/ordering-api:$(imageTag)
 
-        echo "Waiting for rollout"
-
         kubectl rollout status deployment/catalog-api
         kubectl rollout status deployment/basket-api
         kubectl rollout status deployment/identity-api
         kubectl rollout status deployment/ordering-api
 
-        echo "Cluster status"
         kubectl get pods
         kubectl get svc
       displayName: Deploy to Kubernetes
