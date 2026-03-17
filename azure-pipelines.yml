@@ -13,6 +13,9 @@ variables:
 - name: imageTag
   value: $(Build.BuildId)
 
+- name: namespace
+  value: eshop
+
 stages:
 
 # ---------------- BUILD ----------------
@@ -26,6 +29,7 @@ stages:
         version: 10.0.x
 
     - script: |
+        echo "Restore & Build"
         dotnet restore src/WebApp/WebApp.csproj
         dotnet build src/WebApp/WebApp.csproj --configuration Release --no-restore
       displayName: Build Project
@@ -41,21 +45,29 @@ stages:
         echo "Login to DockerHub"
         echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 
-        echo "Build Catalog API"
+        echo "Build & Push Catalog API"
         docker build -t $(dockerHubRepo)/catalog-api:$(imageTag) -f src/Catalog.API/Dockerfile .
+        docker tag $(dockerHubRepo)/catalog-api:$(imageTag) $(dockerHubRepo)/catalog-api:latest
         docker push $(dockerHubRepo)/catalog-api:$(imageTag)
+        docker push $(dockerHubRepo)/catalog-api:latest
 
-        echo "Build Basket API"
+        echo "Build & Push Basket API"
         docker build -t $(dockerHubRepo)/basket-api:$(imageTag) -f src/Basket.API/Dockerfile .
+        docker tag $(dockerHubRepo)/basket-api:$(imageTag) $(dockerHubRepo)/basket-api:latest
         docker push $(dockerHubRepo)/basket-api:$(imageTag)
+        docker push $(dockerHubRepo)/basket-api:latest
 
-        echo "Build Identity API"
+        echo "Build & Push Identity API"
         docker build -t $(dockerHubRepo)/identity-api:$(imageTag) -f src/Identity.API/Dockerfile .
+        docker tag $(dockerHubRepo)/identity-api:$(imageTag) $(dockerHubRepo)/identity-api:latest
         docker push $(dockerHubRepo)/identity-api:$(imageTag)
+        docker push $(dockerHubRepo)/identity-api:latest
 
-        echo "Build Ordering API"
+        echo "Build & Push Ordering API"
         docker build -t $(dockerHubRepo)/ordering-api:$(imageTag) -f src/Ordering.API/Dockerfile .
+        docker tag $(dockerHubRepo)/ordering-api:$(imageTag) $(dockerHubRepo)/ordering-api:latest
         docker push $(dockerHubRepo)/ordering-api:$(imageTag)
+        docker push $(dockerHubRepo)/ordering-api:latest
 
       displayName: Build & Push Images
 
@@ -67,23 +79,26 @@ stages:
   - job: DeployJob
     steps:
     - script: |
-        echo "Apply Kubernetes manifests"
-        kubectl apply -f k8s/
+        echo "Create namespace if not exists"
+        kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
+
+        echo "Apply manifests"
+        kubectl apply -f k8s/ -n $(namespace)
 
         echo "Update images"
-        kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag)
-        kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag)
-        kubectl set image deployment/identity-api identity-api=$(dockerHubRepo)/identity-api:$(imageTag)
-        kubectl set image deployment/ordering-api ordering-api=$(dockerHubRepo)/ordering-api:$(imageTag)
+        kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag) -n $(namespace)
+        kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag) -n $(namespace)
+        kubectl set image deployment/identity-api identity-api=$(dockerHubRepo)/identity-api:$(imageTag) -n $(namespace)
+        kubectl set image deployment/ordering-api ordering-api=$(dockerHubRepo)/ordering-api:$(imageTag) -n $(namespace)
 
         echo "Wait for rollout"
-        kubectl rollout status deployment/catalog-api
-        kubectl rollout status deployment/basket-api
-        kubectl rollout status deployment/identity-api
-        kubectl rollout status deployment/ordering-api
+        kubectl rollout status deployment/catalog-api -n $(namespace)
+        kubectl rollout status deployment/basket-api -n $(namespace)
+        kubectl rollout status deployment/identity-api -n $(namespace)
+        kubectl rollout status deployment/ordering-api -n $(namespace)
 
         echo "Cluster status"
-        kubectl get pods
-        kubectl get svc
+        kubectl get pods -n $(namespace)
+        kubectl get svc -n $(namespace)
 
       displayName: Deploy to Kubernetes
