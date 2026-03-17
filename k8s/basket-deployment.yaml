@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: basket-api
+  namespace: eshop
 spec:
   replicas: 2
   selector:
@@ -21,15 +22,10 @@ spec:
         ports:
         - containerPort: 80
 
-        env:
-        - name: ASPNETCORE_ENVIRONMENT
-          value: "Development"
+        envFrom:
+        - configMapRef:
+            name: app-config
 
+        env:
         - name: ConnectionStrings__basketdb
           value: "Host=postgres;Port=5432;Database=basketdb;Username=postgres;Password=postgres"
-
-        - name: EventBus__HostName
-          value: "rabbitmq"
-
-        - name: Redis__ConnectionString
-          value: "redis:6379"
