@@ -2,18 +2,30 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: identity-api
+  namespace: eshop
 spec:
   replicas: 2
   selector:
     matchLabels:
       app: identity-api
+
   template:
     metadata:
       labels:
         app: identity-api
+
     spec:
       containers:
       - name: identity-api
         image: pavankumarch1219/identity-api:latest
+
         ports:
         - containerPort: 80
+
+        envFrom:
+        - configMapRef:
+            name: app-config
+
+        env:
+        - name: ConnectionStrings__identitydb
+          value: "Host=postgres;Port=5432;Database=identitydb;Username=postgres;Password=postgres"
