@@ -7,13 +7,26 @@ spec:
   selector:
     matchLabels:
       app: ordering-api
+
   template:
     metadata:
       labels:
         app: ordering-api
+
     spec:
       containers:
       - name: ordering-api
         image: pavankumarch1219/ordering-api:latest
+
         ports:
         - containerPort: 80
+
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Development"
+
+        - name: ConnectionStrings__orderingdb
+          value: "Host=postgres;Port=5432;Database=orderingdb;Username=postgres;Password=postgres"
+
+        - name: EventBus__HostName
+          value: "rabbitmq"
