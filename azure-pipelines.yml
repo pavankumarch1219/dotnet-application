@@ -1,134 +1,141 @@
 trigger:
-- main
+  - main
 
 pool:
   name: agent-vayu
 
 variables:
-- group: docker-credentials
+  - group: docker-credentials
 
-- name: dockerHubRepo
-  value: pavankumarch1219
+  - name: dockerHubRepo
+    value: pavankumarch1219
 
-- name: imageTag
-  value: $(Build.BuildId)
+  - name: imageTag
+    value: $(Build.BuildId)
 
-- name: namespace
-  value: eshop
-
+  - name: namespace
+    value: eshop
 
 # ================= BUILD =================
 stages:
-- stage: Build
-  displayName: Build .NET 10 Apps
-  jobs:
-  - job: BuildJob
-    steps:
+  - stage: Build
+    displayName: Build Required Services (.NET 10)
+    jobs:
+      - job: BuildJob
+        steps:
+          - task: UseDotNet@2
+            displayName: Install .NET 10 SDK
+            inputs:
+              packageType: sdk
+              version: 10.0.x
+              includePreviewVersions: true
 
-    - task: UseDotNet@2
-      displayName: Install .NET 10 SDK (Preview)
-      inputs:
-        packageType: sdk
-        version: 10.0.x
-        includePreviewVersions: true
+          - script: |
+              set -e
 
-    - script: |
-        echo "Verify .NET version"
-        dotnet --version
+              echo "Verify .NET version"
+              dotnet --version
 
-        echo "Restore"
-        dotnet restore
+              echo "========== RESTORE =========="
 
-        echo "Build"
-        dotnet build --configuration Release --no-restore
+              dotnet restore src/Catalog.API/Catalog.API.csproj
+              dotnet restore src/Basket.API/Basket.API.csproj
+              dotnet restore src/Identity.API/Identity.API.csproj
+              dotnet restore src/Ordering.API/Ordering.API.csproj
+              dotnet restore src/WebApp/WebApp.csproj
 
-      displayName: Restore & Build
+              echo "========== BUILD =========="
 
+              dotnet build src/Catalog.API/Catalog.API.csproj --configuration Release --no-restore
+              dotnet build src/Basket.API/Basket.API.csproj --configuration Release --no-restore
+              dotnet build src/Identity.API/Identity.API.csproj --configuration Release --no-restore
+              dotnet build src/Ordering.API/Ordering.API.csproj --configuration Release --no-restore
+              dotnet build src/WebApp/WebApp.csproj --configuration Release --no-restore
+            displayName: Restore & Build (Selective)
 
 # ================= DOCKER =================
-- stage: Docker
-  displayName: Build & Push Images
-  dependsOn: Build
-  jobs:
-  - job: DockerJob
-    steps:
+  - stage: Docker
+    displayName: Build & Push Docker Images
+    dependsOn: Build
+    jobs:
+      - job: DockerJob
+        steps:
+          - script: |
+              set -e
+              echo "Login to DockerHub"
+              echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+            displayName: Docker Login
 
-    - script: |
-        echo "Login to DockerHub"
-        echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+          - script: |
+              set -e
 
-      displayName: Docker Login
+              echo "========== BUILD & PUSH SERVICES =========="
 
+              # Catalog API
+              docker build -t $(dockerHubRepo)/catalog-api:$(imageTag) -f src/Catalog.API/Dockerfile .
+              docker tag $(dockerHubRepo)/catalog-api:$(imageTag) $(dockerHubRepo)/catalog-api:latest
+              docker push $(dockerHubRepo)/catalog-api:$(imageTag)
+              docker push $(dockerHubRepo)/catalog-api:latest
 
-    - script: |
-        set -e
+              # Basket API
+              docker build -t $(dockerHubRepo)/basket-api:$(imageTag) -f src/Basket.API/Dockerfile .
+              docker tag $(dockerHubRepo)/basket-api:$(imageTag) $(dockerHubRepo)/basket-api:latest
+              docker push $(dockerHubRepo)/basket-api:$(imageTag)
+              docker push $(dockerHubRepo)/basket-api:latest
 
-        echo "========== BUILD & PUSH ALL SERVICES =========="
+              # Identity API
+              docker build -t $(dockerHubRepo)/identity-api:$(imageTag) -f src/Identity.API/Dockerfile .
+              docker tag $(dockerHubRepo)/identity-api:$(imageTag) $(dockerHubRepo)/identity-api:latest
+              docker push $(dockerHubRepo)/identity-api:$(imageTag)
+              docker push $(dockerHubRepo)/identity-api:latest
 
-        SERVICES=("catalog-api" "basket-api" "identity-api" "ordering-api")
+              # Ordering API
+              docker build -t $(dockerHubRepo)/ordering-api:$(imageTag) -f src/Ordering.API/Dockerfile .
+              docker tag $(dockerHubRepo)/ordering-api:$(imageTag) $(dockerHubRepo)/ordering-api:latest
+              docker push $(dockerHubRepo)/ordering-api:$(imageTag)
+              docker push $(dockerHubRepo)/ordering-api:latest
 
-        for SERVICE in "${SERVICES[@]}"; do
-          echo "Building $SERVICE"
-
-          docker build \
-            -t $(dockerHubRepo)/$SERVICE:$(imageTag) \
-            -f src/$(echo $SERVICE | sed 's/-api/.API/')/Dockerfile .
-
-          docker tag $(dockerHubRepo)/$SERVICE:$(imageTag) $(dockerHubRepo)/$SERVICE:latest
-
-          docker push $(dockerHubRepo)/$SERVICE:$(imageTag)
-          docker push $(dockerHubRepo)/$SERVICE:latest
-        done
-
-        echo "========== BUILD DOTNET WEB APP =========="
-
-        docker build \
-          -t $(dockerHubRepo)/dotnet-application:$(imageTag) \
-          -f src/WebApp/Dockerfile .
-
-        docker tag $(dockerHubRepo)/dotnet-application:$(imageTag) $(dockerHubRepo)/dotnet-application:latest
-
-        docker push $(dockerHubRepo)/dotnet-application:$(imageTag)
-        docker push $(dockerHubRepo)/dotnet-application:latest
-
-      displayName: Build & Push Docker Images
-
+              # Web App
+              docker build -t $(dockerHubRepo)/dotnet-application:$(imageTag) -f src/WebApp/Dockerfile .
+              docker tag $(dockerHubRepo)/dotnet-application:$(imageTag) $(dockerHubRepo)/dotnet-application:latest
+              docker push $(dockerHubRepo)/dotnet-application:$(imageTag)
+              docker push $(dockerHubRepo)/dotnet-application:latest
+            displayName: Build & Push Images
 
 # ================= DEPLOY =================
-- stage: Deploy
-  displayName: Deploy to Kubernetes
-  dependsOn: Docker
-  jobs:
-  - job: DeployJob
-    steps:
+  - stage: Deploy
+    displayName: Deploy to Kubernetes
+    dependsOn: Docker
+    jobs:
+      - job: DeployJob
+        steps:
+          - script: |
+              set -e
 
-    - script: |
-        set -e
+              echo "Create namespace if not exists"
+              kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
 
-        echo "Create namespace if not exists"
-        kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
+              echo "Apply Kubernetes manifests"
+              kubectl apply -f k8s/ -n $(namespace)
 
-        echo "Apply manifests"
-        kubectl apply -f k8s/ -n $(namespace)
+              echo "========== UPDATE IMAGES =========="
 
-        echo "Rolling update images"
+              kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag) -n $(namespace)
+              kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag) -n $(namespace)
+              kubectl set image deployment/identity-api identity-api=$(dockerHubRepo)/identity-api:$(imageTag) -n $(namespace)
+              kubectl set image deployment/ordering-api ordering-api=$(dockerHubRepo)/ordering-api:$(imageTag) -n $(namespace)
+              kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo)/dotnet-application:$(imageTag) -n $(namespace)
 
-        kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag) -n $(namespace)
-        kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag) -n $(namespace)
-        kubectl set image deployment/identity-api identity-api=$(dockerHubRepo)/identity-api:$(imageTag) -n $(namespace)
-        kubectl set image deployment/ordering-api ordering-api=$(dockerHubRepo)/ordering-api:$(imageTag) -n $(namespace)
-        kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo)/dotnet-application:$(imageTag) -n $(namespace)
+              echo "========== WAIT FOR ROLLOUT =========="
 
-        echo "Waiting for rollout"
+              kubectl rollout status deployment/catalog-api -n $(namespace)
+              kubectl rollout status deployment/basket-api -n $(namespace)
+              kubectl rollout status deployment/identity-api -n $(namespace)
+              kubectl rollout status deployment/ordering-api -n $(namespace)
+              kubectl rollout status deployment/dotnet-app -n $(namespace)
 
-        kubectl rollout status deployment/catalog-api -n $(namespace)
-        kubectl rollout status deployment/basket-api -n $(namespace)
-        kubectl rollout status deployment/identity-api -n $(namespace)
-        kubectl rollout status deployment/ordering-api -n $(namespace)
-        kubectl rollout status deployment/dotnet-app -n $(namespace)
+              echo "========== FINAL STATUS =========="
 
-        echo "Cluster Status"
-        kubectl get pods -n $(namespace)
-        kubectl get svc -n $(namespace)
-
-      displayName: Deploy & Verify
+              kubectl get pods -n $(namespace)
+              kubectl get svc -n $(namespace)
+            displayName: Deploy & Verify
