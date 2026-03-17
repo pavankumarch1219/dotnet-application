@@ -7,13 +7,27 @@ spec:
   selector:
     matchLabels:
       app: catalog-api
+
   template:
     metadata:
       labels:
         app: catalog-api
+
     spec:
       containers:
       - name: catalog-api
         image: pavankumarch1219/catalog-api:latest
+
         ports:
         - containerPort: 80
+
+        # ✅ IMPORTANT FIX (ENV VARIABLES)
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Development"
+
+        - name: ConnectionStrings__catalogdb
+          value: "Host=postgres;Port=5432;Database=catalogdb;Username=postgres;Password=postgres"
+
+        - name: EventBus__HostName
+          value: "rabbitmq"
