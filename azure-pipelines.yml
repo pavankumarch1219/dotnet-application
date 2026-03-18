@@ -127,67 +127,77 @@ stages:
               docker push $(dockerHubRepo)/dotnet-application:$(imageTag)
               docker push $(dockerHubRepo)/dotnet-application:latest
 
-# ================= DEPLOY =================
-  - stage: Deploy
-    displayName: Deploy to Kubernetes
-    dependsOn: Docker
+  # ================= DEPLOY =================
+- stage: Deploy
+  displayName: Deploy to Kubernetes
+  dependsOn: Docker
 
-    jobs:
-      - job: DeployJob
-        steps:
+  jobs:
+    - job: DeployJob
+      steps:
 
-          # Validate YAML
-          - script: |
-              export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-              kubectl apply --dry-run=client -f k8s/
-            displayName: Validate Kubernetes YAML
+        # 🔧 Ensure PATH (important for agent)
+        - script: |
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            kubectl version --client
+          displayName: Check kubectl
 
-          # Namespace
-          - script: |
-              kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
-            displayName: Ensure Namespace
+        # 🔍 Validate YAML
+        - script: |
+            kubectl apply --dry-run=client -f k8s/
+          displayName: Validate Kubernetes YAML
 
-          # Apply manifests
-          - script: |
-              kubectl apply -f k8s/ -n $(namespace)
-            displayName: Apply Manifests
+        # 📦 Namespace
+        - script: |
+            kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
+          displayName: Ensure Namespace
 
-          # Update images
-          - script: |
-              set -e
+        # 🔥 CLEAN OLD (prevents NodePort + stale issues)
+        - script: |
+            echo "========== CLEAN OLD =========="
 
-              kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag) -n $(namespace)
-              kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag) -n $(namespace)
-              kubectl set image deployment/identity-api identity-api=$(dockerHubRepo)/identity-api:$(imageTag) -n $(namespace)
-              kubectl set image deployment/ordering-api ordering-api=$(dockerHubRepo)/ordering-api:$(imageTag) -n $(namespace)
-              kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo)/dotnet-application:$(imageTag) -n $(namespace)
+            kubectl delete deployment --all -n $(namespace) || true
+            kubectl delete service --all -n $(namespace) || true
+            kubectl delete ingress --all -n $(namespace) || true
+            kubectl delete configmap --all -n $(namespace) || true
+            kubectl delete secret --all -n $(namespace) || true
+            kubectl delete pvc --all -n $(namespace) || true
 
-            displayName: Update Images
+          displayName: Clean Old Resources
 
-          # Wait rollout
-          - script: |
-              kubectl rollout status deployment/catalog-api -n $(namespace)
-              kubectl rollout status deployment/basket-api -n $(namespace)
-              kubectl rollout status deployment/identity-api -n $(namespace)
-              kubectl rollout status deployment/ordering-api -n $(namespace)
-              kubectl rollout status deployment/dotnet-app -n $(namespace)
-            displayName: Wait for Rollout
+        # 🚀 Apply manifests fresh
+        - script: |
+            echo "========== APPLY =========="
+            kubectl apply -f k8s/ -n $(namespace)
+          displayName: Apply Manifests
 
-          # Verify
-          - script: |
-              kubectl get pods -n $(namespace)
-              kubectl get svc -n $(namespace)
-            displayName: Verify Deployment
+        # 🔄 Update images
+        - script: |
+            echo "========== UPDATE IMAGES =========="
 
-          # Rollback
-          - script: |
-              echo "Rollback triggered"
+            kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag) -n $(namespace)
+            kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag) -n $(namespace)
+            kubectl set image deployment/identity-api identity-api=$(dockerHubRepo)/identity-api:$(imageTag) -n $(namespace)
+            kubectl set image deployment/ordering-api ordering-api=$(dockerHubRepo)/ordering-api:$(imageTag) -n $(namespace)
+            kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo)/dotnet-application:$(imageTag) -n $(namespace)
 
-              kubectl rollout undo deployment/catalog-api -n $(namespace)
-              kubectl rollout undo deployment/basket-api -n $(namespace)
-              kubectl rollout undo deployment/identity-api -n $(namespace)
-              kubectl rollout undo deployment/ordering-api -n $(namespace)
-              kubectl rollout undo deployment/dotnet-app -n $(namespace)
+          displayName: Update Images
 
-            displayName: Rollback on Failure
-            condition: failed()
+        # ⏳ Wait rollout
+        - script: |
+            echo "========== WAIT =========="
+
+            kubectl rollout status deployment/catalog-api -n $(namespace)
+            kubectl rollout status deployment/basket-api -n $(namespace)
+            kubectl rollout status deployment/identity-api -n $(namespace)
+            kubectl rollout status deployment/ordering-api -n $(namespace)
+            kubectl rollout status deployment/dotnet-app -n $(namespace)
+
+          displayName: Wait for Rollout
+
+        # 📊 Verify
+        - script: |
+            echo "========== FINAL STATUS =========="
+            kubectl get pods -n $(namespace)
+            kubectl get svc -n $(namespace)
+          displayName: Verify Deployment
