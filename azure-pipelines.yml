@@ -19,7 +19,7 @@ variables:
 # ================= BUILD =================
 stages:
   - stage: Build
-    displayName: Build & Test
+    displayName: Build Services Only
     jobs:
       - job: BuildJob
         steps:
@@ -31,11 +31,24 @@ stages:
 
           - script: |
               set -e
-              echo "Restore & Build"
 
-              dotnet restore
-              dotnet build --configuration Release --no-restore
-            displayName: Restore & Build
+              echo "========== RESTORE =========="
+
+              dotnet restore src/Catalog.API/Catalog.API.csproj
+              dotnet restore src/Basket.API/Basket.API.csproj
+              dotnet restore src/Identity.API/Identity.API.csproj
+              dotnet restore src/Ordering.API/Ordering.API.csproj
+              dotnet restore src/WebApp/WebApp.csproj
+
+              echo "========== BUILD =========="
+
+              dotnet build src/Catalog.API/Catalog.API.csproj --configuration Release --no-restore
+              dotnet build src/Basket.API/Basket.API.csproj --configuration Release --no-restore
+              dotnet build src/Identity.API/Identity.API.csproj --configuration Release --no-restore
+              dotnet build src/Ordering.API/Ordering.API.csproj --configuration Release --no-restore
+              dotnet build src/WebApp/WebApp.csproj --configuration Release --no-restore
+
+            displayName: Restore & Build (Selective)
 
 # ================= DOCKER =================
   - stage: Docker
@@ -65,6 +78,8 @@ stages:
                 docker push $(dockerHubRepo)/$NAME:latest
               }
 
+              echo "========== BUILD & PUSH =========="
+
               build_push catalog-api src/Catalog.API
               build_push basket-api src/Basket.API
               build_push identity-api src/Identity.API
@@ -81,7 +96,7 @@ stages:
       - job: DeployJob
         steps:
 
-          # 🔍 Validate YAML (CRITICAL)
+          # 🔍 Validate YAML
           - script: |
               kubectl apply --dry-run=client -f k8s/
             displayName: Validate Kubernetes YAML
@@ -96,35 +111,42 @@ stages:
               kubectl apply -f k8s/ -n $(namespace)
             displayName: Apply Manifests
 
-          # 🔄 Update Images (Rolling Update)
+          # 🔄 Update Images
           - script: |
               set -e
+
+              echo "========== UPDATE IMAGES =========="
 
               kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag) -n $(namespace)
               kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag) -n $(namespace)
               kubectl set image deployment/identity-api identity-api=$(dockerHubRepo)/identity-api:$(imageTag) -n $(namespace)
               kubectl set image deployment/ordering-api ordering-api=$(dockerHubRepo)/ordering-api:$(imageTag) -n $(namespace)
               kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo)/dotnet-application:$(imageTag) -n $(namespace)
+
             displayName: Update Images
 
           # ⏳ Wait for rollout
           - script: |
               set -e
 
+              echo "========== WAIT FOR ROLLOUT =========="
+
               kubectl rollout status deployment/catalog-api -n $(namespace)
               kubectl rollout status deployment/basket-api -n $(namespace)
               kubectl rollout status deployment/identity-api -n $(namespace)
               kubectl rollout status deployment/ordering-api -n $(namespace)
               kubectl rollout status deployment/dotnet-app -n $(namespace)
+
             displayName: Wait for Rollout
 
-          # 📊 Final status
+          # 📊 Verify
           - script: |
+              echo "========== FINAL STATUS =========="
               kubectl get pods -n $(namespace)
               kubectl get svc -n $(namespace)
             displayName: Verify Deployment
 
-          # 🔥 AUTO ROLLBACK (VERY IMPORTANT)
+          # 🔥 Rollback (only on failure)
           - script: |
               echo "Rollback triggered"
 
@@ -133,5 +155,6 @@ stages:
               kubectl rollout undo deployment/identity-api -n $(namespace)
               kubectl rollout undo deployment/ordering-api -n $(namespace)
               kubectl rollout undo deployment/dotnet-app -n $(namespace)
+
             displayName: Rollback on Failure
             condition: failed()
