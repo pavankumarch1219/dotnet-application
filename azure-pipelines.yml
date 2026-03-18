@@ -54,68 +54,107 @@ stages:
   - stage: Docker
     displayName: Build & Push Images
     dependsOn: Build
+
     jobs:
-      - job: DockerJob
+
+      # 🔹 Catalog
+      - job: Catalog
         steps:
-
-          # 🔐 Secure Login
           - script: |
+              export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
               echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
-            displayName: Docker Login
 
-          # 🔥 Build & Push
+              docker build -t $(dockerHubRepo)/catalog-api:$(imageTag) -f src/Catalog.API/Dockerfile .
+              docker tag $(dockerHubRepo)/catalog-api:$(imageTag) $(dockerHubRepo)/catalog-api:latest
+
+              docker push $(dockerHubRepo)/catalog-api:$(imageTag)
+              docker push $(dockerHubRepo)/catalog-api:latest
+
+      # 🔹 Basket
+      - job: Basket
+        steps:
           - script: |
-              set -e
+              export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-              build_push () {
-                NAME=$1
-                PATH=$2
+              echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 
-                docker build -t $(dockerHubRepo)/$NAME:$(imageTag) -f $PATH/Dockerfile .
-                docker tag $(dockerHubRepo)/$NAME:$(imageTag) $(dockerHubRepo)/$NAME:latest
+              docker build -t $(dockerHubRepo)/basket-api:$(imageTag) -f src/Basket.API/Dockerfile .
+              docker tag $(dockerHubRepo)/basket-api:$(imageTag) $(dockerHubRepo)/basket-api:latest
 
-                docker push $(dockerHubRepo)/$NAME:$(imageTag)
-                docker push $(dockerHubRepo)/$NAME:latest
-              }
+              docker push $(dockerHubRepo)/basket-api:$(imageTag)
+              docker push $(dockerHubRepo)/basket-api:latest
 
-              echo "========== BUILD & PUSH =========="
+      # 🔹 Identity
+      - job: Identity
+        steps:
+          - script: |
+              export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-              build_push catalog-api src/Catalog.API
-              build_push basket-api src/Basket.API
-              build_push identity-api src/Identity.API
-              build_push ordering-api src/Ordering.API
-              build_push dotnet-application src/WebApp
+              echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 
-            displayName: Build & Push All Images
+              docker build -t $(dockerHubRepo)/identity-api:$(imageTag) -f src/Identity.API/Dockerfile .
+              docker tag $(dockerHubRepo)/identity-api:$(imageTag) $(dockerHubRepo)/identity-api:latest
+
+              docker push $(dockerHubRepo)/identity-api:$(imageTag)
+              docker push $(dockerHubRepo)/identity-api:latest
+
+      # 🔹 Ordering
+      - job: Ordering
+        steps:
+          - script: |
+              export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+              echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+
+              docker build -t $(dockerHubRepo)/ordering-api:$(imageTag) -f src/Ordering.API/Dockerfile .
+              docker tag $(dockerHubRepo)/ordering-api:$(imageTag) $(dockerHubRepo)/ordering-api:latest
+
+              docker push $(dockerHubRepo)/ordering-api:$(imageTag)
+              docker push $(dockerHubRepo)/ordering-api:latest
+
+      # 🔹 WebApp
+      - job: WebApp
+        steps:
+          - script: |
+              export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+              echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+
+              docker build -t $(dockerHubRepo)/dotnet-application:$(imageTag) -f src/WebApp/Dockerfile .
+              docker tag $(dockerHubRepo)/dotnet-application:$(imageTag) $(dockerHubRepo)/dotnet-application:latest
+
+              docker push $(dockerHubRepo)/dotnet-application:$(imageTag)
+              docker push $(dockerHubRepo)/dotnet-application:latest
 
 # ================= DEPLOY =================
   - stage: Deploy
     displayName: Deploy to Kubernetes
     dependsOn: Docker
+
     jobs:
       - job: DeployJob
         steps:
 
-          # 🔍 Validate YAML
+          # Validate YAML
           - script: |
+              export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
               kubectl apply --dry-run=client -f k8s/
             displayName: Validate Kubernetes YAML
 
-          # 📦 Namespace
+          # Namespace
           - script: |
               kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
             displayName: Ensure Namespace
 
-          # 🚀 Apply manifests
+          # Apply manifests
           - script: |
               kubectl apply -f k8s/ -n $(namespace)
             displayName: Apply Manifests
 
-          # 🔄 Update Images
+          # Update images
           - script: |
               set -e
-
-              echo "========== UPDATE IMAGES =========="
 
               kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag) -n $(namespace)
               kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag) -n $(namespace)
@@ -125,28 +164,22 @@ stages:
 
             displayName: Update Images
 
-          # ⏳ Wait for rollout
+          # Wait rollout
           - script: |
-              set -e
-
-              echo "========== WAIT FOR ROLLOUT =========="
-
               kubectl rollout status deployment/catalog-api -n $(namespace)
               kubectl rollout status deployment/basket-api -n $(namespace)
               kubectl rollout status deployment/identity-api -n $(namespace)
               kubectl rollout status deployment/ordering-api -n $(namespace)
               kubectl rollout status deployment/dotnet-app -n $(namespace)
-
             displayName: Wait for Rollout
 
-          # 📊 Verify
+          # Verify
           - script: |
-              echo "========== FINAL STATUS =========="
               kubectl get pods -n $(namespace)
               kubectl get svc -n $(namespace)
             displayName: Verify Deployment
 
-          # 🔥 Rollback (only on failure)
+          # Rollback
           - script: |
               echo "Rollback triggered"
 
