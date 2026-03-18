@@ -20,17 +20,22 @@ spec:
             - containerPort: 80
 
           env:
-            - name: ConnectionStrings__catalogdb
-              value: Host=postgres.eshop.svc.cluster.local;Port=5432;Database=catalogdb;Username=postgres;Password=postgres
+            - name: ConnectionStrings__DefaultConnection
+              value: Host=postgres;Port=5432;Database=catalogdb;Username=postgres;Password=postgres
+
+            - name: ASPNETCORE_URLS
+              value: http://+:80
 
           readinessProbe:
             httpGet:
               path: /health
               port: 80
-            initialDelaySeconds: 5
+            initialDelaySeconds: 10
+            periodSeconds: 10
 
           livenessProbe:
             httpGet:
               path: /health
               port: 80
-            initialDelaySeconds: 15
+            initialDelaySeconds: 20
+            periodSeconds: 15
