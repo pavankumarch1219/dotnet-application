@@ -18,6 +18,7 @@ spec:
           image: postgres:15
           ports:
             - containerPort: 5432
+
           env:
             - name: POSTGRES_DB
               value: identitydb
@@ -31,9 +32,31 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: POSTGRES_PASSWORD
+
           volumeMounts:
             - mountPath: /var/lib/postgresql/data
               name: postgres-storage
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          livenessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 20
+            periodSeconds: 10
+
+          readinessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
       volumes:
         - name: postgres-storage
           persistentVolumeClaim:
