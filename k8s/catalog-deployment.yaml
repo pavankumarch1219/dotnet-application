@@ -8,32 +8,30 @@ spec:
   selector:
     matchLabels:
       app: catalog-api
-
   template:
     metadata:
       labels:
         app: catalog-api
-
     spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox
+          command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting; sleep 5; done;']
+
       containers:
-      - name: catalog-api
-        image: pavankumarch1219/catalog-api:latest
+        - name: catalog-api
+          image: pavankumarch1219/catalog-api:latest
+          ports:
+            - containerPort: 80
 
-        ports:
-        - containerPort: 80
+          env:
+            - name: ConnectionStrings__catalogdb
+              value: Host=postgres;Port=5432;Database=catalogdb;Username=postgres;Password=postgres
 
-        envFrom:
-        - configMapRef:
-            name: app-config
-
-        env:
-        - name: ConnectionStrings__catalogdb
-          value: "Host=postgres;Port=5432;Database=catalogdb;Username=postgres;Password=postgres"
-
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "128Mi"
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
