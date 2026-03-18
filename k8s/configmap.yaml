@@ -4,5 +4,6 @@ metadata:
   name: app-config
   namespace: eshop
 data:
-  ASPNETCORE_ENVIRONMENT: "Development"
-  EventBus__HostName: "rabbitmq"
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  RABBITMQ_HOST: rabbitmq
