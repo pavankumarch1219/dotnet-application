@@ -4,10 +4,8 @@ metadata:
   name: catalog-service
   namespace: eshop
 spec:
-  type: NodePort
   selector:
     app: catalog-api
   ports:
     - port: 80
       targetPort: 80
-      nodePort: 30007
