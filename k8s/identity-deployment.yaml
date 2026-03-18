@@ -13,11 +13,6 @@ spec:
       labels:
         app: identity-api
     spec:
-      initContainers:
-        - name: wait-for-postgres
-          image: busybox
-          command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting; sleep 5; done;']
-
       containers:
         - name: identity-api
           image: pavankumarch1219/identity-api:latest
@@ -26,19 +21,16 @@ spec:
 
           env:
             - name: ConnectionStrings__identitydb
-              value: Host=postgres;Port=5432;Database=identitydb;Username=postgres;Password=postgres
+              value: Host=postgres.eshop.svc.cluster.local;Port=5432;Database=identitydb;Username=postgres;Password=postgres
 
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "128Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 5
 
           livenessProbe:
             httpGet:
               path: /health
               port: 80
             initialDelaySeconds: 15
-            periodSeconds: 10
