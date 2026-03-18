@@ -8,16 +8,14 @@ spec:
   selector:
     matchLabels:
       app: rabbitmq
-
   template:
     metadata:
       labels:
         app: rabbitmq
-
     spec:
       containers:
-      - name: rabbitmq
-        image: rabbitmq:3-management
-        ports:
-        - containerPort: 5672
-        - containerPort: 15672
+        - name: rabbitmq
+          image: rabbitmq:3-management
+          ports:
+            - containerPort: 5672
+            - containerPort: 15672
