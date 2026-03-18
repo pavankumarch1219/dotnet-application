@@ -1,11 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: ordering-service
+  name: postgres
+  namespace: eshop
 spec:
   selector:
-    app: ordering-api
+    app: postgres
   ports:
-    - port: 80
-      targetPort: 80
-  type: NodePort
+    - name: db
+      port: 5432
+      targetPort: 5432
