@@ -2,7 +2,7 @@ trigger:
 - main
 
 pool:
-  name: agent-vayu
+  name: demo-pool
 
 variables:
 - group: docker-credentials
