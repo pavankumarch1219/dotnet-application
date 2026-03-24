@@ -3,6 +3,7 @@ kind: Deployment
 metadata:
   name: postgres
   namespace: eshop
+
 spec:
   replicas: 1
   selector:
@@ -23,7 +24,6 @@ spec:
             - containerPort: 5432
 
           env:
-            # ✅ Use same DB as secret (important)
             - name: POSTGRES_DB
               value: catalogdb
 
@@ -65,5 +65,4 @@ spec:
 
       volumes:
         - name: postgres-storage
-          persistentVolumeClaim:
-            claimName: postgres-pvc
+          emptyDir: {}
