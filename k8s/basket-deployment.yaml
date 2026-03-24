@@ -31,4 +31,4 @@ spec:
           valueFrom:
             secretKeyRef:
               name: app-secret
-              key: CONNECTION_STRING
+              key: BASKET_DB
