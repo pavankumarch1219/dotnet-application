@@ -146,3 +146,4 @@ stages:
         kubectl get pods -n $(namespace)
         kubectl get svc -n $(namespace)
       displayName: Verify
+      
