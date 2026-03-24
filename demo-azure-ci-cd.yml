@@ -74,7 +74,7 @@ stages:
         docker build -t $(dockerHubRepo)/dotnet-application:$(imageTag) -f src/WebApp/Dockerfile .
         docker push $(dockerHubRepo)/dotnet-application:$(imageTag)
 
-      displayName: Build & Push All Images
+      displayName: Build & Push Images
 
 
 # ================= DEPLOY =================
@@ -92,21 +92,33 @@ stages:
         kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
       displayName: Ensure Namespace
 
+    # ✅ Apply Secret FIRST (fix your error)
     - script: |
         kubectl apply -f k8s/secret.yaml -n $(namespace)
-        kubectl apply -f k8s/configmap.yaml -n $(namespace)
-        kubectl apply -f k8s/postgres-pvc.yaml -n $(namespace)
-      displayName: Apply Core Resources
+      displayName: Apply Secret
 
+    # ✅ Apply Config + Storage
+    - script: |
+        kubectl apply -f k8s/configmap.yaml -n $(namespace)
+      displayName: Apply ConfigMap
+
+    # ❗ OPTIONAL (only if using PVC)
+    - script: |
+        kubectl apply -f k8s/postgres-pvc.yaml -n $(namespace) || true
+      displayName: Apply PVC
+
+    # ✅ Apply all microservices
     - script: |
         kubectl apply -f k8s/ -n $(namespace)
-      displayName: Apply Manifests
+      displayName: Apply All Manifests
 
+    # ✅ Wait for Postgres (CRITICAL)
     - script: |
         echo "Waiting for Postgres..."
-        kubectl wait --for=condition=ready pod -l app=postgres -n $(namespace) --timeout=120s
+        kubectl wait --for=condition=ready pod -l app=postgres -n $(namespace) --timeout=180s
       displayName: Wait for Postgres
 
+    # ✅ Update images
     - script: |
         kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag) -n $(namespace)
         kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag) -n $(namespace)
@@ -115,10 +127,12 @@ stages:
         kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo)/dotnet-application:$(imageTag) -n $(namespace)
       displayName: Update Images
 
+    # ✅ Restart (important for secrets)
     - script: |
         kubectl rollout restart deployment -n $(namespace)
       displayName: Restart Pods
 
+    # ✅ Wait for rollout
     - script: |
         kubectl rollout status deployment/catalog-api -n $(namespace)
         kubectl rollout status deployment/basket-api -n $(namespace)
@@ -127,6 +141,7 @@ stages:
         kubectl rollout status deployment/dotnet-app -n $(namespace)
       displayName: Wait for Rollout
 
+    # ✅ Final check
     - script: |
         kubectl get pods -n $(namespace)
         kubectl get svc -n $(namespace)
