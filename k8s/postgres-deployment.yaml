@@ -18,14 +18,14 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:15
+          image: pgvector/pgvector:pg15   # ✅ FIXED (IMPORTANT)
 
           ports:
             - containerPort: 5432
 
           env:
             - name: POSTGRES_DB
-              value: postgres   # 👈 important change
+              value: postgres   # ✅ correct
 
             - name: POSTGRES_USER
               valueFrom:
@@ -43,7 +43,7 @@ spec:
             - mountPath: /var/lib/postgresql/data
               name: postgres-storage
 
-            # 👇 mount init script
+            # ✅ init script mount
             - mountPath: /docker-entrypoint-initdb.d
               name: postgres-init
 
@@ -71,7 +71,6 @@ spec:
         - name: postgres-storage
           emptyDir: {}
 
-        # 👇 new volume for init script
         - name: postgres-init
           configMap:
             name: postgres-init
