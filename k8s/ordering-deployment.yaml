@@ -31,7 +31,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: app-secret
-                  key: CONNECTION_STRING
+                  key: ORDERING_DB
 
             # ✅ RabbitMQ (correct as is)
             - name: EventBus__HostName
