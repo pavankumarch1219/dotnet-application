@@ -25,7 +25,7 @@ spec:
 
           env:
             - name: POSTGRES_DB
-              value: catalogdb
+              value: postgres   # 👈 important change
 
             - name: POSTGRES_USER
               valueFrom:
@@ -42,6 +42,10 @@ spec:
           volumeMounts:
             - mountPath: /var/lib/postgresql/data
               name: postgres-storage
+
+            # 👇 mount init script
+            - mountPath: /docker-entrypoint-initdb.d
+              name: postgres-init
 
           resources:
             requests:
@@ -66,3 +70,8 @@ spec:
       volumes:
         - name: postgres-storage
           emptyDir: {}
+
+        # 👇 new volume for init script
+        - name: postgres-init
+          configMap:
+            name: postgres-init
