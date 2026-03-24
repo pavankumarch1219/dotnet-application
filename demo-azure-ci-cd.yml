@@ -34,14 +34,12 @@ stages:
     - script: |
         set -e
 
-        echo "========== RESTORE =========="
         dotnet restore src/Catalog.API/Catalog.API.csproj
         dotnet restore src/Basket.API/Basket.API.csproj
         dotnet restore src/Identity.API/Identity.API.csproj
         dotnet restore src/Ordering.API/Ordering.API.csproj
         dotnet restore src/WebApp/WebApp.csproj
 
-        echo "========== BUILD =========="
         dotnet build src/Catalog.API/Catalog.API.csproj --configuration Release --no-restore
         dotnet build src/Basket.API/Basket.API.csproj --configuration Release --no-restore
         dotnet build src/Identity.API/Identity.API.csproj --configuration Release --no-restore
@@ -56,41 +54,27 @@ stages:
   displayName: Build & Push Images
   dependsOn: Build
   jobs:
-
-  - job: Catalog
+  - job: BuildPush
     steps:
     - script: |
         echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+
         docker build -t $(dockerHubRepo)/catalog-api:$(imageTag) -f src/Catalog.API/Dockerfile .
         docker push $(dockerHubRepo)/catalog-api:$(imageTag)
 
-  - job: Basket
-    steps:
-    - script: |
-        echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
         docker build -t $(dockerHubRepo)/basket-api:$(imageTag) -f src/Basket.API/Dockerfile .
         docker push $(dockerHubRepo)/basket-api:$(imageTag)
 
-  - job: Identity
-    steps:
-    - script: |
-        echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
         docker build -t $(dockerHubRepo)/identity-api:$(imageTag) -f src/Identity.API/Dockerfile .
         docker push $(dockerHubRepo)/identity-api:$(imageTag)
 
-  - job: Ordering
-    steps:
-    - script: |
-        echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
         docker build -t $(dockerHubRepo)/ordering-api:$(imageTag) -f src/Ordering.API/Dockerfile .
         docker push $(dockerHubRepo)/ordering-api:$(imageTag)
 
-  - job: WebApp
-    steps:
-    - script: |
-        echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
         docker build -t $(dockerHubRepo)/dotnet-application:$(imageTag) -f src/WebApp/Dockerfile .
         docker push $(dockerHubRepo)/dotnet-application:$(imageTag)
+
+      displayName: Build & Push All Images
 
 
 # ================= DEPLOY =================
@@ -119,12 +103,21 @@ stages:
       displayName: Apply Manifests
 
     - script: |
+        echo "Waiting for Postgres..."
+        kubectl wait --for=condition=ready pod -l app=postgres -n $(namespace) --timeout=120s
+      displayName: Wait for Postgres
+
+    - script: |
         kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag) -n $(namespace)
         kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag) -n $(namespace)
         kubectl set image deployment/identity-api identity-api=$(dockerHubRepo)/identity-api:$(imageTag) -n $(namespace)
         kubectl set image deployment/ordering-api ordering-api=$(dockerHubRepo)/ordering-api:$(imageTag) -n $(namespace)
         kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo)/dotnet-application:$(imageTag) -n $(namespace)
       displayName: Update Images
+
+    - script: |
+        kubectl rollout restart deployment -n $(namespace)
+      displayName: Restart Pods
 
     - script: |
         kubectl rollout status deployment/catalog-api -n $(namespace)
