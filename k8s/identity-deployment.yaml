@@ -8,20 +8,27 @@ spec:
   selector:
     matchLabels:
       app: identity-api
+
   template:
     metadata:
       labels:
         app: identity-api
+
     spec:
       containers:
         - name: identity-api
           image: pavankumarch1219/identity-api:latest
+
           ports:
             - containerPort: 80
 
           env:
+            # ✅ Use Secret instead of hardcoded connection string
             - name: ConnectionStrings__DefaultConnection
-              value: Host=postgres;Port=5432;Database=identitydb;Username=postgres;Password=postgres
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: CONNECTION_STRING
 
             - name: ASPNETCORE_URLS
               value: http://+:80
