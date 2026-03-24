@@ -8,14 +8,52 @@ spec:
   selector:
     matchLabels:
       app: rabbitmq
+
   template:
     metadata:
       labels:
         app: rabbitmq
+
     spec:
       containers:
         - name: rabbitmq
           image: rabbitmq:3-management
+
           ports:
-            - containerPort: 5672
-            - containerPort: 15672
+            - containerPort: 5672    # AMQP
+            - containerPort: 15672   # Management UI
+
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: "guest"
+
+            - name: RABBITMQ_DEFAULT_PASS
+              value: "guest"
+
+          volumeMounts:
+            - name: rabbitmq-storage
+              mountPath: /var/lib/rabbitmq
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          livenessProbe:
+            tcpSocket:
+              port: 5672
+            initialDelaySeconds: 20
+            periodSeconds: 10
+
+          readinessProbe:
+            tcpSocket:
+              port: 5672
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+      volumes:
+        - name: rabbitmq-storage
+          emptyDir: {}
