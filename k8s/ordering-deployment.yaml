@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ordering-api
+  namespace: eshop
 spec:
   replicas: 2
   selector:
@@ -15,18 +16,23 @@ spec:
 
     spec:
       containers:
-      - name: ordering-api
-        image: pavankumarch1219/ordering-api:latest
+        - name: ordering-api
+          image: pavankumarch1219/ordering-api:latest
 
-        ports:
-        - containerPort: 80
+          ports:
+            - containerPort: 80
 
-        env:
-        - name: ASPNETCORE_ENVIRONMENT
-          value: "Development"
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Development"
 
-        - name: ConnectionStrings__orderingdb
-          value: "Host=postgres;Port=5432;Database=orderingdb;Username=postgres;Password=postgres"
+            # ✅ Use Secret for DB connection
+            - name: ConnectionStrings__orderingdb
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: CONNECTION_STRING
 
-        - name: EventBus__HostName
-          value: "rabbitmq"
+            # ✅ RabbitMQ (correct as is)
+            - name: EventBus__HostName
+              value: "rabbitmq"
