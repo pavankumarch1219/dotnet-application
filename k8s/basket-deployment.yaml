@@ -28,4 +28,7 @@ spec:
 
         env:
         - name: ConnectionStrings__basketdb
-          value: "Host=postgres;Port=5432;Database=basketdb;Username=postgres;Password=postgres"
+          valueFrom:
+            secretKeyRef:
+              name: app-secret
+              key: CONNECTION_STRING
