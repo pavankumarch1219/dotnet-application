@@ -27,7 +27,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: app-secret
-                  key: CONNECTION_STRING
+                  key: CATALOG_DB
 
             - name: ASPNETCORE_URLS
               value: http://+:80
