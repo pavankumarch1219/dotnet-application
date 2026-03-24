@@ -8,20 +8,26 @@ spec:
   selector:
     matchLabels:
       app: catalog-api
+
   template:
     metadata:
       labels:
         app: catalog-api
+
     spec:
       containers:
         - name: catalog-api
           image: pavankumarch1219/catalog-api:latest
+
           ports:
             - containerPort: 80
 
           env:
             - name: ConnectionStrings__DefaultConnection
-              value: Host=postgres;Port=5432;Database=catalogdb;Username=postgres;Password=postgres
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: CONNECTION_STRING
 
             - name: ASPNETCORE_URLS
               value: http://+:80
