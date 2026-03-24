@@ -23,12 +23,29 @@ spec:
             - containerPort: 80
 
           env:
+            # ✅ Postgres connection (already correct)
             - name: ConnectionStrings__catalogdb
               valueFrom:
                 secretKeyRef:
                   name: app-secret
                   key: CATALOG_DB
 
+            # ✅ FIX 1: RabbitMQ host (CRITICAL)
+            - name: RabbitMQ__HostName
+              value: rabbitmq
+
+            # ✅ FIX 2: RabbitMQ port
+            - name: RabbitMQ__Port
+              value: "5672"
+
+            # ✅ FIX 3: Credentials (default for RabbitMQ container)
+            - name: RabbitMQ__UserName
+              value: guest
+
+            - name: RabbitMQ__Password
+              value: guest
+
+            # ✅ ASP.NET config
             - name: ASPNETCORE_URLS
               value: http://+:80
 
