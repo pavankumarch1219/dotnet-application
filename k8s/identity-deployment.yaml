@@ -24,7 +24,7 @@ spec:
 
           env:
             # ✅ Use Secret instead of hardcoded connection string
-            - name: ConnectionStrings__DefaultConnection
+            - name: ConnectionStrings__identitydb
               valueFrom:
                 secretKeyRef:
                   name: app-secret
