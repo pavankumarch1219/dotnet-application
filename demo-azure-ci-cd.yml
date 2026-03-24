@@ -1,4 +1,4 @@
-trigger: 
+trigger:
 - main
 
 pool:
@@ -85,34 +85,42 @@ stages:
   - job: DeployJob
     steps:
 
+    # ✅ kubectl check
     - script: kubectl version --client
       displayName: Check kubectl
 
+    # ✅ Ensure namespace
     - script: |
         kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
       displayName: Ensure Namespace
 
-    # ✅ Apply Secret FIRST (fix your error)
+    # ✅ Apply Secret FIRST
     - script: |
         kubectl apply -f k8s/secret.yaml -n $(namespace)
       displayName: Apply Secret
 
-    # ✅ Apply Config + Storage
+    # ✅ Apply ConfigMaps (INCLUDING DB INIT 🔥)
     - script: |
         kubectl apply -f k8s/configmap.yaml -n $(namespace)
-      displayName: Apply ConfigMap
+        kubectl apply -f k8s/postgres-init-configmap.yaml -n $(namespace)
+      displayName: Apply ConfigMaps
 
-    # ❗ OPTIONAL (only if using PVC)
+    # ❗ Optional PVC (safe)
     - script: |
         kubectl apply -f k8s/postgres-pvc.yaml -n $(namespace) || true
       displayName: Apply PVC
 
-    # ✅ Apply all microservices
+    # ✅ Apply ALL resources
     - script: |
         kubectl apply -f k8s/ -n $(namespace)
-      displayName: Apply All Manifests
+      displayName: Apply Manifests
 
-    # ✅ Wait for Postgres (CRITICAL)
+    # 🔥 IMPORTANT: Restart postgres to trigger init script
+    - script: |
+        kubectl delete pod -l app=postgres -n $(namespace) || true
+      displayName: Restart Postgres (Init DB)
+
+    # ✅ Wait for Postgres ready
     - script: |
         echo "Waiting for Postgres..."
         kubectl wait --for=condition=ready pod -l app=postgres -n $(namespace) --timeout=180s
@@ -127,7 +135,7 @@ stages:
         kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo)/dotnet-application:$(imageTag) -n $(namespace)
       displayName: Update Images
 
-    # ✅ Restart (important for secrets)
+    # ✅ Restart apps
     - script: |
         kubectl rollout restart deployment -n $(namespace)
       displayName: Restart Pods
@@ -141,9 +149,8 @@ stages:
         kubectl rollout status deployment/dotnet-app -n $(namespace)
       displayName: Wait for Rollout
 
-    # ✅ Final check
+    # ✅ Verify
     - script: |
         kubectl get pods -n $(namespace)
         kubectl get svc -n $(namespace)
       displayName: Verify
-      
