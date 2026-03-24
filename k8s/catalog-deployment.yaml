@@ -23,7 +23,7 @@ spec:
             - containerPort: 80
 
           env:
-            - name: ConnectionStrings__DefaultConnection
+            - name: ConnectionStrings__catalogdb
               valueFrom:
                 secretKeyRef:
                   name: app-secret
