@@ -3,10 +3,24 @@ kind: Ingress
 metadata:
   name: eshop-ingress
   namespace: eshop
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+
 spec:
+  ingressClassName: nginx
+
   rules:
   - http:
       paths:
+
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: dotnet-app
+            port:
+              number: 80
+
       - path: /catalog
         pathType: Prefix
         backend:
@@ -19,7 +33,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: basket-service
+            name: basket-api
             port:
               number: 80
 
@@ -28,13 +42,5 @@ spec:
         backend:
           service:
             name: identity-service
-            port:
-              number: 80
-
-      - path: /ordering
-        pathType: Prefix
-        backend:
-          service:
-            name: ordering-service
             port:
               number: 80
