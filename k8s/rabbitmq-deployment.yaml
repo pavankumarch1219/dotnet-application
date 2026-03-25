@@ -1,12 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: rabbitmq
   namespace: eshop
-  labels:
-    app: rabbitmq
 
 spec:
+  serviceName: rabbitmq
   replicas: 1
 
   selector:
@@ -21,61 +20,38 @@ spec:
     spec:
       containers:
         - name: rabbitmq
-          image: rabbitmq:3-management
-          imagePullPolicy: IfNotPresent
+          image: rabbitmq:3.13-management-alpine
 
           ports:
-            - name: amqp
-              containerPort: 5672
-            - name: management
-              containerPort: 15672
+            - containerPort: 5672
+              name: amqp
+            - containerPort: 15672
+              name: management
 
           env:
             - name: RABBITMQ_DEFAULT_USER
-              valueFrom:
-                secretKeyRef:
-                  name: rabbitmq-secret
-                  key: RABBITMQ_USER
+              value: "guest"
 
             - name: RABBITMQ_DEFAULT_PASS
-              valueFrom:
-                secretKeyRef:
-                  name: rabbitmq-secret
-                  key: RABBITMQ_PASS
-
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "256Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
-
-          # ✅ ONLY ONE probe type (exec)
-          livenessProbe:
-            exec:
-              command:
-                - rabbitmq-diagnostics
-                - -q
-                - ping
-            initialDelaySeconds: 60
-            periodSeconds: 30
-            failureThreshold: 3
+              value: "guest"
 
           readinessProbe:
             exec:
-              command:
-                - rabbitmq-diagnostics
-                - -q
-                - check_port_connectivity
-            initialDelaySeconds: 30
-            periodSeconds: 15
-            failureThreshold: 3
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+
+          livenessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 40
+            periodSeconds: 30
 
           volumeMounts:
-            - name: rabbitmq-storage
+            - name: rabbitmq-data
               mountPath: /var/lib/rabbitmq
 
       volumes:
-        - name: rabbitmq-storage
-          emptyDir: {}
+        - name: rabbitmq-data
+          persistentVolumeClaim:
+            claimName: rabbitmq-pvc
