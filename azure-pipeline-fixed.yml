@@ -1,0 +1,317 @@
+# ============================================================
+# Azure DevOps Pipeline — eShop (.NET + Kubernetes)
+# Fixed version: correct trigger syntax, stable SDK, timeouts,
+# latest tag, smoke tests, and safe rollout handling.
+# ============================================================
+
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  name: demo-pool
+
+variables:
+  - group: docker-credentials   # Must contain: DOCKER_USERNAME, DOCKER_PASSWORD
+
+  - name: dockerHubRepo
+    value: pavankumarch1219
+
+  - name: imageTag
+    value: $(Build.BuildId)
+
+  - name: namespace
+    value: eshop
+
+# ================================================================
+# STAGE 1 — Build & Test all services
+# ================================================================
+stages:
+- stage: Build
+  displayName: "Build & Test"
+  jobs:
+  - job: BuildJob
+    displayName: "Restore, Build, Test"
+    timeoutInMinutes: 30
+    steps:
+
+    - task: UseDotNet@2
+      displayName: "Install .NET 8 SDK"
+      inputs:
+        packageType: sdk
+        version: 8.0.x           # Stable LTS — avoid 10.x preview in CI
+
+    - script: |
+        set -e
+
+        echo "=== Restoring dependencies ==="
+        dotnet restore src/Catalog.API/Catalog.API.csproj
+        dotnet restore src/Basket.API/Basket.API.csproj
+        dotnet restore src/Identity.API/Identity.API.csproj
+        dotnet restore src/Ordering.API/Ordering.API.csproj
+        dotnet restore src/WebApp/WebApp.csproj
+
+        echo "=== Building all services ==="
+        dotnet build src/Catalog.API/Catalog.API.csproj   --configuration Release --no-restore
+        dotnet build src/Basket.API/Basket.API.csproj     --configuration Release --no-restore
+        dotnet build src/Identity.API/Identity.API.csproj --configuration Release --no-restore
+        dotnet build src/Ordering.API/Ordering.API.csproj --configuration Release --no-restore
+        dotnet build src/WebApp/WebApp.csproj             --configuration Release --no-restore
+      displayName: "Restore & Build"
+
+    - script: |
+        set -e
+        echo "=== Running unit tests ==="
+
+        RAN_TESTS=false
+
+        for testProject in tests/*.Tests/*.csproj; do
+          if [ -f "$testProject" ]; then
+            echo "Running: $testProject"
+            dotnet test "$testProject" \
+              --configuration Release \
+              --no-build \
+              --logger "trx;LogFileName=results.trx" \
+              --results-directory "$(Agent.TempDirectory)/test-results"
+            RAN_TESTS=true
+          fi
+        done
+
+        if [ "$RAN_TESTS" = false ]; then
+          echo "No test projects found — skipping test stage."
+        fi
+      displayName: "Run Unit Tests"
+      continueOnError: false
+
+    - task: PublishTestResults@2
+      displayName: "Publish Test Results"
+      condition: succeededOrFailed()
+      inputs:
+        testResultsFormat: VSTest
+        testResultsFiles: "$(Agent.TempDirectory)/test-results/**/*.trx"
+        failTaskOnFailedTests: true
+
+# ================================================================
+# STAGE 2 — Build Docker images & push to Docker Hub
+# ================================================================
+- stage: Docker
+  displayName: "Docker Build & Push"
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  - job: BuildPush
+    displayName: "Build & Push All Images"
+    timeoutInMinutes: 45
+    steps:
+
+    - task: UseDotNet@2
+      displayName: "Install .NET 8 SDK (for publish step)"
+      inputs:
+        packageType: sdk
+        version: 8.0.x
+
+    - script: |
+        echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+      displayName: "Docker Hub Login"
+
+    - script: |
+        set -e
+
+        TAG=$(imageTag)
+        REPO=$(dockerHubRepo)
+
+        build_and_push() {
+          SERVICE=$1
+          DOCKERFILE=$2
+          IMAGE="$REPO/$SERVICE"
+
+          echo "=== Building $IMAGE:$TAG ==="
+          docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" -f "$DOCKERFILE" .
+
+          echo "=== Pushing $IMAGE:$TAG and $IMAGE:latest ==="
+          docker push "$IMAGE:$TAG"
+          docker push "$IMAGE:latest"
+        }
+
+        build_and_push "catalog-api"          "src/Catalog.API/Dockerfile"
+        build_and_push "basket-api"           "src/Basket.API/Dockerfile"
+        build_and_push "identity-api"         "src/Identity.API/Dockerfile"
+        build_and_push "ordering-api"         "src/Ordering.API/Dockerfile"
+        build_and_push "dotnet-application"   "src/WebApp/Dockerfile"
+      displayName: "Build & Push All Images"
+
+    - script: |
+        docker logout
+      displayName: "Docker Logout"
+      condition: always()   # Always logout even if build fails
+
+# ================================================================
+# STAGE 3 — Deploy to Kubernetes
+# ================================================================
+- stage: Deploy
+  displayName: "Deploy to Kubernetes"
+  dependsOn: Docker
+  condition: succeeded()
+  jobs:
+  - job: DeployJob
+    displayName: "K8s Deploy"
+    timeoutInMinutes: 30
+    steps:
+
+    - script: |
+        kubectl version --client
+        kubectl cluster-info
+      displayName: "Verify kubectl & Cluster"
+
+    # ── Namespace ──────────────────────────────────────────────
+    - script: |
+        kubectl get namespace $(namespace) 2>/dev/null \
+          || kubectl create namespace $(namespace)
+        echo "Namespace $(namespace) is ready."
+      displayName: "Ensure Namespace"
+
+    # ── Secrets ────────────────────────────────────────────────
+    - script: |
+        kubectl apply -f k8s/secret.yaml -n $(namespace)
+      displayName: "Apply Secrets"
+
+    # ── ConfigMaps ─────────────────────────────────────────────
+    - script: |
+        kubectl apply -f k8s/configmap.yaml -n $(namespace)
+        kubectl apply -f k8s/postgres-init-configmap.yaml -n $(namespace)
+      displayName: "Apply ConfigMaps"
+
+    # ── Storage ────────────────────────────────────────────────
+    - script: |
+        kubectl apply -f k8s/postgres-pvc.yaml -n $(namespace) || true
+      displayName: "Apply PVC (optional)"
+
+    # ── Infrastructure (Postgres + RabbitMQ) ───────────────────
+    - script: |
+        kubectl apply -f k8s/postgres-deployment.yaml -n $(namespace)
+        kubectl apply -f k8s/rabbitmq-fixed.yaml      -n $(namespace)
+      displayName: "Deploy Infrastructure"
+
+    # Restart Postgres pod so the init configmap is re-applied
+    - script: |
+        kubectl delete pod -l app=postgres -n $(namespace) --ignore-not-found=true
+        echo "Waiting for Postgres to become ready..."
+        kubectl wait --for=condition=ready pod \
+          -l app=postgres \
+          -n $(namespace) \
+          --timeout=180s
+      displayName: "Restart Postgres & Wait"
+
+    - script: |
+        kubectl rollout status deployment/rabbitmq \
+          -n $(namespace) --timeout=120s
+      displayName: "Wait for RabbitMQ"
+
+    # ── Apply fixed ingress ─────────────────────────────────────
+    - script: |
+        kubectl apply -f k8s/eshop-ingress-fixed.yaml -n $(namespace)
+      displayName: "Apply Ingress (with path-rewrite fix)"
+
+    # ── Apply all remaining manifests ──────────────────────────
+    - script: |
+        # Apply everything — ingress & PVC already applied above, no harm reapplying
+        kubectl apply -f k8s/ -n $(namespace)
+      displayName: "Apply All Manifests"
+
+    # ── Update images to the exact build tag ───────────────────
+    - script: |
+        set -e
+        TAG=$(imageTag)
+        REPO=$(dockerHubRepo)
+        NS=$(namespace)
+
+        kubectl set image deployment/catalog-api  catalog-api=$(REPO)/catalog-api:$(TAG)        -n $NS
+        kubectl set image deployment/basket-api   basket-api=$(REPO)/basket-api:$(TAG)          -n $NS
+        kubectl set image deployment/identity-api identity-api=$(REPO)/identity-api:$(TAG)      -n $NS
+        kubectl set image deployment/ordering-api ordering-api=$(REPO)/ordering-api:$(TAG)      -n $NS
+        kubectl set image deployment/dotnet-app   dotnet-app=$(REPO)/dotnet-application:$(TAG)  -n $NS
+
+        # Ensure pods pull the new image even if tag was reused
+        kubectl rollout restart deployment/catalog-api  -n $NS
+        kubectl rollout restart deployment/basket-api   -n $NS
+        kubectl rollout restart deployment/identity-api -n $NS
+        kubectl rollout restart deployment/ordering-api -n $NS
+        kubectl rollout restart deployment/dotnet-app   -n $NS
+      displayName: "Update Images & Restart Pods"
+
+    # ── Wait for all deployments to be healthy ─────────────────
+    - script: |
+        set -e
+        NS=$(namespace)
+
+        for dep in catalog-api basket-api identity-api ordering-api dotnet-app; do
+          echo "Waiting for $dep to roll out..."
+          kubectl rollout status deployment/$dep -n $NS --timeout=180s \
+            || { echo "ERROR: $dep rollout failed!"; kubectl describe deployment/$dep -n $NS; exit 1; }
+        done
+
+        echo ""
+        echo "=== All deployments are healthy ==="
+        kubectl get pods -n $NS
+        kubectl get svc  -n $NS
+        kubectl get ingress -n $NS
+      displayName: "Wait for Rollout & Verify Pods"
+
+    # ── Smoke tests ────────────────────────────────────────────
+    - script: |
+        set -e
+        NS=$(namespace)
+
+        # Get external IP from the ingress
+        EXTERNAL_IP=$(kubectl get ingress eshop-ingress -n $NS \
+          -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+
+        # Fall back to NodePort IP if ingress IP isn't available yet
+        if [ -z "$EXTERNAL_IP" ]; then
+          EXTERNAL_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
+          PORT=":30694"
+        else
+          PORT=""
+        fi
+
+        BASE="http://$EXTERNAL_IP$PORT"
+        echo "Running smoke tests against: $BASE"
+
+        check() {
+          local NAME=$1
+          local URL=$2
+          local EXPECTED=$3
+          local CODE
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$URL" || echo "000")
+          if [ "$CODE" = "$EXPECTED" ]; then
+            echo "PASS [$CODE] $NAME -> $URL"
+          else
+            echo "FAIL [$CODE] $NAME -> $URL (expected $EXPECTED)"
+            FAILED=true
+          fi
+        }
+
+        FAILED=false
+        check "Identity UI"      "$BASE/identity"        "200"
+        check "Catalog health"   "$BASE/catalog/health"  "200"
+        check "Basket health"    "$BASE/basket/health"   "200"   # was the /cart 500
+        check "Ordering health"  "$BASE/ordering/health" "200"
+        check "Frontend"         "$BASE/"                "200"
+
+        if [ "$FAILED" = true ]; then
+          echo ""
+          echo "One or more smoke tests FAILED. Check pod logs:"
+          kubectl logs deployment/basket-api   -n $NS --tail=30 || true
+          kubectl logs deployment/catalog-api  -n $NS --tail=30 || true
+          exit 1
+        fi
+
+        echo ""
+        echo "All smoke tests passed!"
+      displayName: "Smoke Tests (health + /identity + frontend)"
