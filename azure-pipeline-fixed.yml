@@ -45,7 +45,7 @@ stages:
       displayName: "Install .NET 8 SDK"
       inputs:
         packageType: sdk
-        version: 8.0.x           # Stable LTS — avoid 10.x preview in CI
+        version: 8.0.x
 
     - script: |
         set -e
@@ -139,17 +139,17 @@ stages:
           docker push "$IMAGE:latest"
         }
 
-        build_and_push "catalog-api"          "src/Catalog.API/Dockerfile"
-        build_and_push "basket-api"           "src/Basket.API/Dockerfile"
-        build_and_push "identity-api"         "src/Identity.API/Dockerfile"
-        build_and_push "ordering-api"         "src/Ordering.API/Dockerfile"
-        build_and_push "dotnet-application"   "src/WebApp/Dockerfile"
+        build_and_push "catalog-api"        "src/Catalog.API/Dockerfile"
+        build_and_push "basket-api"         "src/Basket.API/Dockerfile"
+        build_and_push "identity-api"       "src/Identity.API/Dockerfile"
+        build_and_push "ordering-api"       "src/Ordering.API/Dockerfile"
+        build_and_push "dotnet-application" "src/WebApp/Dockerfile"
       displayName: "Build & Push All Images"
 
     - script: |
         docker logout
       displayName: "Docker Logout"
-      condition: always()   # Always logout even if build fails
+      condition: always()
 
 # ================================================================
 # STAGE 3 — Deploy to Kubernetes
@@ -169,34 +169,43 @@ stages:
         kubectl cluster-info
       displayName: "Verify kubectl & Cluster"
 
-    # ── Namespace ──────────────────────────────────────────────
+    # ── Namespace ─────────────────────────────────────────────
+    # k8s/namespace.yaml exists in repo — apply it directly
     - script: |
-        kubectl get namespace $(namespace) 2>/dev/null \
-          || kubectl create namespace $(namespace)
+        kubectl apply -f k8s/namespace.yaml
         echo "Namespace $(namespace) is ready."
       displayName: "Ensure Namespace"
 
-    # ── Secrets ────────────────────────────────────────────────
+    # ── Secrets ───────────────────────────────────────────────
+    # k8s/secret.yaml — confirmed in repo
     - script: |
         kubectl apply -f k8s/secret.yaml -n $(namespace)
       displayName: "Apply Secrets"
 
-    # ── ConfigMaps ─────────────────────────────────────────────
+    # ── ConfigMaps ────────────────────────────────────────────
+    # k8s/configmap.yaml + k8s/postgres-init-configmap.yaml — both confirmed in repo
     - script: |
-        kubectl apply -f k8s/configmap.yaml -n $(namespace)
+        kubectl apply -f k8s/configmap.yaml              -n $(namespace)
         kubectl apply -f k8s/postgres-init-configmap.yaml -n $(namespace)
       displayName: "Apply ConfigMaps"
 
-    # ── Storage ────────────────────────────────────────────────
+    # ── Storage ───────────────────────────────────────────────
+    # k8s/postgres-pvc.yaml — confirmed in repo
     - script: |
         kubectl apply -f k8s/postgres-pvc.yaml -n $(namespace) || true
-      displayName: "Apply PVC (optional)"
+      displayName: "Apply PVC"
 
-    # ── Infrastructure (Postgres + RabbitMQ) ───────────────────
+    # ── Infrastructure ────────────────────────────────────────
+    # k8s/postgres-deployment.yaml — confirmed in repo
+    # k8s/rabbitmq-deployment.yaml — confirmed in repo (NOT rabbitmq-fixed.yaml)
+    # k8s/postgres-service.yaml    — confirmed in repo
+    # k8s/rabbitmq-service.yaml    — confirmed in repo
     - script: |
         kubectl apply -f k8s/postgres-deployment.yaml -n $(namespace)
-        kubectl apply -f k8s/rabbitmq-fixed.yaml      -n $(namespace)
-      displayName: "Deploy Infrastructure"
+        kubectl apply -f k8s/postgres-service.yaml    -n $(namespace)
+        kubectl apply -f k8s/rabbitmq-deployment.yaml -n $(namespace)
+        kubectl apply -f k8s/rabbitmq-service.yaml    -n $(namespace)
+      displayName: "Deploy Infrastructure (Postgres + RabbitMQ)"
 
     # Restart Postgres pod so the init configmap is re-applied
     - script: |
@@ -213,31 +222,57 @@ stages:
           -n $(namespace) --timeout=120s
       displayName: "Wait for RabbitMQ"
 
-    # ── Apply fixed ingress ─────────────────────────────────────
+    # ── Ingress ───────────────────────────────────────────────
+    # k8s/ingress.yaml — confirmed in repo (NOT eshop-ingress-fixed.yaml)
     - script: |
-        kubectl apply -f k8s/eshop-ingress-fixed.yaml -n $(namespace)
-      displayName: "Apply Ingress (with path-rewrite fix)"
+        kubectl apply -f k8s/ingress.yaml -n $(namespace)
+      displayName: "Apply Ingress"
 
-    # ── Apply all remaining manifests ──────────────────────────
+    # ── Application Services ──────────────────────────────────
+    # k8s/catalog-service.yaml    — confirmed in repo
+    # k8s/basket-service.yaml     — confirmed in repo
+    # k8s/identity-service.yaml   — confirmed in repo
+    # k8s/ordering-service.yaml   — confirmed in repo
+    # k8s/dotnet-service.yaml     — confirmed in repo
+    # k8s/service.yaml            — confirmed (targetPort 8080)
     - script: |
-        # Apply everything — ingress & PVC already applied above, no harm reapplying
-        kubectl apply -f k8s/ -n $(namespace)
-      displayName: "Apply All Manifests"
+        kubectl apply -f k8s/catalog-service.yaml   -n $(namespace)
+        kubectl apply -f k8s/basket-service.yaml    -n $(namespace)
+        kubectl apply -f k8s/identity-service.yaml  -n $(namespace)
+        kubectl apply -f k8s/ordering-service.yaml  -n $(namespace)
+        kubectl apply -f k8s/dotnet-service.yaml    -n $(namespace)
+        kubectl apply -f k8s/service.yaml           -n $(namespace)
+      displayName: "Apply Application Services"
 
-    # ── Update images to the exact build tag ───────────────────
+    # ── Application Deployments ───────────────────────────────
+    # k8s/catalog-deployment.yaml   — confirmed in repo
+    # k8s/basket-deployment.yaml    — confirmed in repo
+    # k8s/identity-deployment.yaml  — confirmed in repo
+    # k8s/ordering-deployment.yaml  — confirmed in repo
+    # k8s/deployment.yaml           — confirmed (WebApp / dotnet-app)
+    - script: |
+        kubectl apply -f k8s/catalog-deployment.yaml  -n $(namespace)
+        kubectl apply -f k8s/basket-deployment.yaml   -n $(namespace)
+        kubectl apply -f k8s/identity-deployment.yaml -n $(namespace)
+        kubectl apply -f k8s/ordering-deployment.yaml -n $(namespace)
+        kubectl apply -f k8s/deployment.yaml          -n $(namespace)
+      displayName: "Apply Application Deployments"
+
+    # ── Update images to the exact build tag ──────────────────
+    # NOTE: deployment name for WebApp comes from k8s/deployment.yaml
+    # The container name inside that file must match below (dotnet-app assumed)
     - script: |
         set -e
         TAG=$(imageTag)
         REPO=$(dockerHubRepo)
         NS=$(namespace)
 
-        kubectl set image deployment/catalog-api  catalog-api=$(REPO)/catalog-api:$(TAG)        -n $NS
-        kubectl set image deployment/basket-api   basket-api=$(REPO)/basket-api:$(TAG)          -n $NS
-        kubectl set image deployment/identity-api identity-api=$(REPO)/identity-api:$(TAG)      -n $NS
-        kubectl set image deployment/ordering-api ordering-api=$(REPO)/ordering-api:$(TAG)      -n $NS
-        kubectl set image deployment/dotnet-app   dotnet-app=$(REPO)/dotnet-application:$(TAG)  -n $NS
+        kubectl set image deployment/catalog-api  catalog-api=$REPO/catalog-api:$TAG        -n $NS
+        kubectl set image deployment/basket-api   basket-api=$REPO/basket-api:$TAG          -n $NS
+        kubectl set image deployment/identity-api identity-api=$REPO/identity-api:$TAG      -n $NS
+        kubectl set image deployment/ordering-api ordering-api=$REPO/ordering-api:$TAG      -n $NS
+        kubectl set image deployment/dotnet-app   dotnet-app=$REPO/dotnet-application:$TAG  -n $NS
 
-        # Ensure pods pull the new image even if tag was reused
         kubectl rollout restart deployment/catalog-api  -n $NS
         kubectl rollout restart deployment/basket-api   -n $NS
         kubectl rollout restart deployment/identity-api -n $NS
@@ -245,7 +280,7 @@ stages:
         kubectl rollout restart deployment/dotnet-app   -n $NS
       displayName: "Update Images & Restart Pods"
 
-    # ── Wait for all deployments to be healthy ─────────────────
+    # ── Wait for all deployments to be healthy ────────────────
     - script: |
         set -e
         NS=$(namespace)
@@ -258,23 +293,22 @@ stages:
 
         echo ""
         echo "=== All deployments are healthy ==="
-        kubectl get pods -n $NS
-        kubectl get svc  -n $NS
+        kubectl get pods    -n $NS
+        kubectl get svc     -n $NS
         kubectl get ingress -n $NS
       displayName: "Wait for Rollout & Verify Pods"
 
-    # ── Smoke tests ────────────────────────────────────────────
+    # ── Smoke Tests ───────────────────────────────────────────
     - script: |
         set -e
         NS=$(namespace)
 
-        # Get external IP from the ingress
         EXTERNAL_IP=$(kubectl get ingress eshop-ingress -n $NS \
           -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
 
-        # Fall back to NodePort IP if ingress IP isn't available yet
         if [ -z "$EXTERNAL_IP" ]; then
-          EXTERNAL_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
+          EXTERNAL_IP=$(kubectl get nodes \
+            -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
           PORT=":30694"
         else
           PORT=""
@@ -282,6 +316,8 @@ stages:
 
         BASE="http://$EXTERNAL_IP$PORT"
         echo "Running smoke tests against: $BASE"
+
+        FAILED=false
 
         check() {
           local NAME=$1
@@ -297,21 +333,19 @@ stages:
           fi
         }
 
-        FAILED=false
+        check "Frontend"         "$BASE/"                "200"
         check "Identity UI"      "$BASE/identity"        "200"
         check "Catalog health"   "$BASE/catalog/health"  "200"
-        check "Basket health"    "$BASE/basket/health"   "200"   # was the /cart 500
+        check "Basket health"    "$BASE/basket/health"   "200"
         check "Ordering health"  "$BASE/ordering/health" "200"
-        check "Frontend"         "$BASE/"                "200"
 
         if [ "$FAILED" = true ]; then
           echo ""
-          echo "One or more smoke tests FAILED. Check pod logs:"
-          kubectl logs deployment/basket-api   -n $NS --tail=30 || true
-          kubectl logs deployment/catalog-api  -n $NS --tail=30 || true
+          echo "One or more smoke tests FAILED. Pod logs:"
+          kubectl logs deployment/basket-api  -n $NS --tail=30 || true
+          kubectl logs deployment/catalog-api -n $NS --tail=30 || true
           exit 1
         fi
 
-        echo ""
         echo "All smoke tests passed!"
-      displayName: "Smoke Tests (health + /identity + frontend)"
+      displayName: "Smoke Tests"
