@@ -161,11 +161,7 @@ stages:
   jobs:
   - job: DeployJob
     displayName: "K8s Deploy"
-    timeoutInMinutes: 30
-    steps:
-
-    - script: |
-        kubectl version --client
+    timeoutInMinutes: 45
         kubectl cluster-info
       displayName: "Verify kubectl & Cluster"
 
@@ -217,9 +213,31 @@ stages:
           --timeout=180s
       displayName: "Restart Postgres & Wait"
 
+    # Force-delete any pod stuck in Terminating (e.g. after rabbitmq-secret recreation)
+    # then wait up to 3 min for the rollout to finish cleanly.
     - script: |
+        set -e
+        NS=$(namespace)
+
+        echo "=== Force-clearing any stuck/Terminating RabbitMQ pods ==="
+        kubectl get pods -n $NS -l app=rabbitmq 2>/dev/null || true
+        kubectl get pods -n $NS -l app=rabbitmq \
+          | grep -w Terminating \
+          | awk '{print $1}' \
+          | xargs -r kubectl delete pod --grace-period=0 --force -n $NS \
+          || true
+
+        echo "=== Waiting for RabbitMQ rollout (timeout 3 min) ==="
         kubectl rollout status deployment/rabbitmq \
-          -n $(namespace) --timeout=120s
+          -n $NS --timeout=180s \
+          || {
+            echo "--- RabbitMQ rollout failed. Diagnostics: ---"
+            kubectl describe pods -l app=rabbitmq -n $NS || true
+            kubectl logs -l app=rabbitmq -n $NS --tail=50 || true
+            exit 1
+          }
+
+        echo "RabbitMQ is ready."
       displayName: "Wait for RabbitMQ"
 
     # ── Ingress ───────────────────────────────────────────────
