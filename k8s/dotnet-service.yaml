@@ -3,10 +3,12 @@ kind: Service
 metadata:
   name: dotnet-app
   namespace: eshop
+
 spec:
   type: ClusterIP
   selector:
     app: dotnet-app
+
   ports:
     - port: 80
       targetPort: 80
