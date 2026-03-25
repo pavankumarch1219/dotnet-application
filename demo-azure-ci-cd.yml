@@ -1,5 +1,5 @@
 trigger:
-  -main
+- main
 
 pool:
   name: demo-pool
@@ -18,16 +18,10 @@ variables:
 
 stages:
 
-# =========================
-# BUILD STAGE
-# =========================
 - stage: Build
-  displayName: Build Stage
   jobs:
   - job: BuildJob
-    displayName: Build .NET Applications
     steps:
-
     - task: UseDotNet@2
       inputs:
         packageType: sdk
@@ -37,26 +31,16 @@ stages:
         set -e
         dotnet restore
         dotnet build --configuration Release --no-restore
-      displayName: Restore & Build
 
-# =========================
-# DOCKER STAGE
-# =========================
 - stage: Docker
-  displayName: Docker Build & Push
   dependsOn: Build
   jobs:
   - job: DockerJob
-    displayName: Build and Push Images
     steps:
-
     - script: |
         echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
-      displayName: Docker Login
 
     - script: |
-        set -e
-
         docker build -t $(dockerHubRepo)/catalog-api:$(imageTag) -f src/Catalog.API/Dockerfile .
         docker push $(dockerHubRepo)/catalog-api:$(imageTag)
 
@@ -71,56 +55,31 @@ stages:
 
         docker build -t $(dockerHubRepo)/dotnet-application:$(imageTag) -f src/WebApp/Dockerfile .
         docker push $(dockerHubRepo)/dotnet-application:$(imageTag)
-      displayName: Build & Push Images
 
-# =========================
-# DEPLOY STAGE
-# =========================
 - stage: Deploy
-  displayName: Deploy to Kubernetes
   dependsOn: Docker
   jobs:
   - job: DeployJob
-    displayName: Deploy to AKS / K8s
     steps:
 
     - script: kubectl version --client
-      displayName: Check kubectl
 
     - script: |
         kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
-      displayName: Ensure Namespace
 
-    # -------- Infra --------
     - script: kubectl apply -f k8s/app-secret.yaml -n $(namespace)
-      displayName: Apply App Secret
-
     - script: kubectl apply -f k8s/rabbitmq-secret.yaml -n $(namespace)
-      displayName: Apply RabbitMQ Secret
-
     - script: kubectl apply -f k8s/configmap.yaml -n $(namespace)
-      displayName: Apply ConfigMap
-
     - script: kubectl apply -f k8s/postgres-init-configmap.yaml -n $(namespace)
-      displayName: Apply Postgres Init Config
-
     - script: kubectl apply -f k8s/postgres-pvc.yaml -n $(namespace)
-      displayName: Apply PVC
 
     - script: kubectl apply -f k8s/postgres-deployment.yaml -n $(namespace)
-      displayName: Deploy Postgres
-
     - script: kubectl apply -f k8s/postgres-service.yaml -n $(namespace)
-      displayName: Expose Postgres
-
     - script: kubectl apply -f k8s/rabbitmq.yaml -n $(namespace)
-      displayName: Deploy RabbitMQ
 
     - script: |
         kubectl wait --for=condition=ready pod -l app=postgres -n $(namespace) --timeout=180s
-      displayName: Wait for Postgres
 
-    # -------- Applications --------
     - script: kubectl apply -f k8s/catalog-deployment.yaml -n $(namespace)
     - script: kubectl apply -f k8s/catalog-service.yaml -n $(namespace)
 
@@ -136,31 +95,23 @@ stages:
     - script: kubectl apply -f k8s/dotnet-deployment.yaml -n $(namespace)
     - script: kubectl apply -f k8s/dotnet-service.yaml -n $(namespace)
 
-    # -------- Ingress --------
     - script: kubectl apply -f k8s/ingress.yaml -n $(namespace)
-      displayName: Apply Ingress
 
-    # -------- Update Images --------
     - script: |
         kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag) -n $(namespace)
         kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag) -n $(namespace)
         kubectl set image deployment/identity-api identity-api=$(dockerHubRepo)/identity-api:$(imageTag) -n $(namespace)
         kubectl set image deployment/ordering-api ordering-api=$(dockerHubRepo)/ordering-api:$(imageTag) -n $(namespace)
         kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo)/dotnet-application:$(imageTag) -n $(namespace)
-      displayName: Update Images
 
-    # -------- Rollout --------
     - script: |
         kubectl rollout status deployment/catalog-api -n $(namespace)
         kubectl rollout status deployment/basket-api -n $(namespace)
         kubectl rollout status deployment/identity-api -n $(namespace)
         kubectl rollout status deployment/ordering-api -n $(namespace)
         kubectl rollout status deployment/dotnet-app -n $(namespace)
-      displayName: Check Rollout
 
-    # -------- Final Check --------
     - script: |
         kubectl get pods -n $(namespace)
         kubectl get svc -n $(namespace)
         kubectl get ingress -n $(namespace)
-      displayName: Verify Deployment
