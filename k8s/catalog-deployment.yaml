@@ -8,6 +8,7 @@ metadata:
 
 spec:
   replicas: 2
+
   selector:
     matchLabels:
       app: catalog-api
@@ -20,21 +21,21 @@ spec:
     spec:
       containers:
         - name: catalog-api
-          image: pavankumarch1219/catalog-api:1.0.0   #  fixed version
+          image: pavankumarch1219/catalog-api:1.0.0
           imagePullPolicy: IfNotPresent
 
           ports:
             - containerPort: 80
 
           env:
-            # Database
+            # 🔹 Database connection
             - name: ConnectionStrings__catalogdb
               valueFrom:
                 secretKeyRef:
                   name: app-secret
                   key: CATALOG_DB
 
-            # RabbitMQ credentials
+            # 🔹 RabbitMQ credentials
             - name: RABBITMQ_USER
               valueFrom:
                 secretKeyRef:
@@ -47,19 +48,23 @@ spec:
                   name: rabbitmq-secret
                   key: RABBITMQ_PASS
 
-            # RabbitMQ connection ( verify service name)
-            - name: ConnectionStrings__EventBus
-              value: "amqp://$(RABBITMQ_USER):$(RABBITMQ_PASS)@rabbitmq:5672"
+            # 🔹 ConfigMap values
+            - name: RABBITMQ_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: RABBITMQ_HOST
 
-            # ASP.NET Core binding
+            # 🔹 EventBus connection
+            - name: ConnectionStrings__EventBus
+              value: "amqp://$(RABBITMQ_USER):$(RABBITMQ_PASS)@$(RABBITMQ_HOST):5672"
+
+            # 🔹 ASP.NET config
             - name: ASPNETCORE_URLS
               value: "http://+:80"
 
-            #  FIX: Support both HTTP/1.1 and HTTP/2
             - name: ASPNETCORE_Kestrel__EndpointDefaults__Protocols
               value: "Http1AndHttp2"
-
-            #  Removed PathBase (causing 404 issues with ingress)
 
           resources:
             requests:
