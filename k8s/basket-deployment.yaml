@@ -8,27 +8,62 @@ spec:
   selector:
     matchLabels:
       app: basket-api
-
   template:
     metadata:
       labels:
         app: basket-api
-
     spec:
       containers:
-      - name: basket-api
-        image: pavankumarch1219/basket-api:latest
-
-        ports:
-        - containerPort: 80
-
-        envFrom:
-        - configMapRef:
-            name: app-config
-
-        env:
-        - name: ConnectionStrings__basketdb
-          valueFrom:
-            secretKeyRef:
-              name: app-secret
-              key: BASKET_DB
+        - name: basket-api
+          image: pavankumarch1219/basket-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          env:
+            - name: ConnectionStrings__BasketDb
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: BASKET_DB
+            - name: RABBITMQ_USER
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: RABBITMQ_USER
+            - name: RABBITMQ_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: RABBITMQ_PASS
+            - name: ConnectionStrings__EventBus
+              value: "amqp://$(RABBITMQ_USER):$(RABBITMQ_PASS)@rabbitmq:5672"
+            - name: ASPNETCORE_URLS
+              value: "http://+:80"
+            # Identity server URL as seen from inside the cluster
+            - name: IdentityUrl
+              value: "http://identity-service/identity"
+            # Public URL used in redirects (external IP)
+            - name: IdentityUrlExternal
+              value: "http://20.245.67.161:30694/identity"
+            - name: PathBase
+              value: "/basket"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 80
+            initialDelaySeconds: 20
+            periodSeconds: 10
