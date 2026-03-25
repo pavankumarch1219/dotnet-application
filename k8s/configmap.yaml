@@ -3,7 +3,8 @@ kind: ConfigMap
 metadata:
   name: app-config
   namespace: eshop
+
 data:
-  DB_HOST: postgres.eshop.svc.cluster.local
+  DB_HOST: postgres
   DB_PORT: "5432"
   RABBITMQ_HOST: rabbitmq
