@@ -3,9 +3,16 @@ kind: Service
 metadata:
   name: identity-service
   namespace: eshop
+  labels:
+    app: identity-api
+
 spec:
+  type: ClusterIP
+
   selector:
     app: identity-api
+
   ports:
-    - port: 80
+    - name: http
+      port: 80
       targetPort: 80
