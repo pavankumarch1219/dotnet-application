@@ -23,7 +23,7 @@ spec:
     - http:
         paths:
 
-          # ✅ Frontend (NO rewrite)
+          #  Frontend (NO rewrite)
           - path: /
             pathType: Prefix
             backend:
@@ -32,7 +32,7 @@ spec:
                 port:
                   number: 80
 
-          # ✅ Catalog
+          #  Catalog
           - path: /catalog(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
@@ -41,7 +41,7 @@ spec:
                 port:
                   number: 80
 
-          # ✅ Basket
+          #  Basket
           - path: /basket(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
@@ -50,7 +50,7 @@ spec:
                 port:
                   number: 80
 
-          # ✅ Identity
+          #  Identity
           - path: /identity(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
@@ -59,7 +59,7 @@ spec:
                 port:
                   number: 80
 
-          # ✅ Ordering
+          #  Ordering
           - path: /ordering(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
