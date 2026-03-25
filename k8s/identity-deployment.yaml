@@ -3,8 +3,12 @@ kind: Deployment
 metadata:
   name: identity-api
   namespace: eshop
+  labels:
+    app: identity-api
+
 spec:
   replicas: 2
+
   selector:
     matchLabels:
       app: identity-api
@@ -17,35 +21,51 @@ spec:
     spec:
       containers:
         - name: identity-api
-          image: pavankumarch1219/identity-api:latest
+          image: pavankumarch1219/identity-api:1.0.0   # ✅ avoid latest
+          imagePullPolicy: IfNotPresent
 
           ports:
             - containerPort: 80
 
           env:
-            # ✅ Use Secret instead of hardcoded connection string
+            # 🔹 Database (from secret)
             - name: ConnectionStrings__identitydb
               valueFrom:
                 secretKeyRef:
                   name: app-secret
                   key: IDENTITY_DB
 
+            # 🔹 ASP.NET Core settings
             - name: ASPNETCORE_URLS
-              value: http://+:80
+              value: "http://+:80"
 
             - name: ASPNETCORE_ENVIRONMENT
-              value: Development
+              value: "Development"
+
+            # 🔹 Fix HTTP/2 issue
+            - name: ASPNETCORE_Kestrel__EndpointDefaults__Protocols
+              value: "Http1AndHttp2"
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
 
           readinessProbe:
             httpGet:
               path: /health
               port: 80
-            initialDelaySeconds: 10
+            initialDelaySeconds: 15
             periodSeconds: 10
+            failureThreshold: 3
 
           livenessProbe:
             httpGet:
               path: /health
               port: 80
-            initialDelaySeconds: 20
+            initialDelaySeconds: 25
             periodSeconds: 15
+            failureThreshold: 3
