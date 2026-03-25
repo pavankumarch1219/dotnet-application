@@ -25,10 +25,24 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: CATALOG_DB
+            # Pull RabbitMQ credentials from a secret, not hardcoded
+            - name: RABBITMQ_USER
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: RABBITMQ_USER
+            - name: RABBITMQ_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: RABBITMQ_PASS
             - name: ConnectionStrings__EventBus
-              value: amqp://guest:guest@rabbitmq:5672
+              value: "amqp://$(RABBITMQ_USER):$(RABBITMQ_PASS)@rabbitmq:5672"
             - name: ASPNETCORE_URLS
-              value: http://+:80
+              value: "http://+:80"
+            # Tell the API its public-facing base path for link generation
+            - name: PathBase
+              value: "/catalog"
           resources:
             requests:
               cpu: "100m"
@@ -36,3 +50,17 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+          # Liveness probe so Kubernetes restarts stuck pods automatically
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 80
+            initialDelaySeconds: 20
+            periodSeconds: 10
