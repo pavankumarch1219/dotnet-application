@@ -3,7 +3,7 @@
 # Clean final version — RabbitMQ CrashLoopBackOff fix included
 # ============================================================
 
-trigger:
+trigger: none
   branches:
     include:
       - main
