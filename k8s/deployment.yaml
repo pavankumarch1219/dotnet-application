@@ -2,9 +2,12 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: dotnet-app
+  namespace: eshop
+  labels:
+    app: dotnet-app
 
 spec:
-  replicas: 1
+  replicas: 2
 
   selector:
     matchLabels:
@@ -17,27 +20,61 @@ spec:
 
     spec:
       containers:
-      - name: dotnet-app
-        image: pavankumarch1219/dotnet-application:latest
+        - name: dotnet-app
+          image: pavankumarch1219/dotnet-application:1.0.0   #  avoid latest
+          imagePullPolicy: IfNotPresent
 
-        ports:
-        - containerPort: 8080
+          ports:
+            - containerPort: 80   #  match ASP.NET default
 
-        env:
-        - name: IdentityUrl
-          value: http://identity-api
+          env:
+            # Internal service URLs (K8s DNS)
+            - name: IdentityUrl
+              value: "http://identity-service"
 
-        - name: CatalogUrl
-          value: http://catalog-api
+            - name: CatalogUrl
+              value: "http://catalog-service"
 
-        - name: BasketUrl
-          value: http://basket-api
+            - name: BasketUrl
+              value: "http://basket-service"
 
-        - name: OrderingUrl
-          value: http://ordering-api
+            - name: OrderingUrl
+              value: "http://ordering-service"
 
-        - name: EventBusConnection
-          value: rabbitmq
+            # RabbitMQ service
+            - name: EventBusConnection
+              value: "rabbitmq"
 
-        - name: CallBackUrl
-          value: http://20.29.210.83:32289
+            # External callback (Ingress / NodePort / LB)
+            - name: CallBackUrl
+              value: "http://20.29.210.83:32289"
+
+            # ASP.NET binding
+            - name: ASPNETCORE_URLS
+              value: "http://+:80"
+
+            #  FIX: avoid HTTP/2 issue
+            - name: ASPNETCORE_Kestrel__EndpointDefaults__Protocols
+              value: "Http1AndHttp2"
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 15
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 20
+            periodSeconds: 10
