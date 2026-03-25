@@ -3,46 +3,64 @@ kind: Deployment
 metadata:
   name: catalog-api
   namespace: eshop
+  labels:
+    app: catalog-api
+
 spec:
   replicas: 2
   selector:
     matchLabels:
       app: catalog-api
+
   template:
     metadata:
       labels:
         app: catalog-api
+
     spec:
       containers:
         - name: catalog-api
-          image: pavankumarch1219/catalog-api:latest
-          imagePullPolicy: Always
+          image: pavankumarch1219/catalog-api:1.0.0   #  fixed version
+          imagePullPolicy: IfNotPresent
+
           ports:
             - containerPort: 80
+
           env:
+            # Database
             - name: ConnectionStrings__catalogdb
               valueFrom:
                 secretKeyRef:
                   name: app-secret
                   key: CATALOG_DB
-            # Pull RabbitMQ credentials from a secret, not hardcoded
+
+            # RabbitMQ credentials
             - name: RABBITMQ_USER
               valueFrom:
                 secretKeyRef:
                   name: rabbitmq-secret
                   key: RABBITMQ_USER
+
             - name: RABBITMQ_PASS
               valueFrom:
                 secretKeyRef:
                   name: rabbitmq-secret
                   key: RABBITMQ_PASS
+
+            # RabbitMQ connection ( verify service name)
             - name: ConnectionStrings__EventBus
               value: "amqp://$(RABBITMQ_USER):$(RABBITMQ_PASS)@rabbitmq:5672"
+
+            # ASP.NET Core binding
             - name: ASPNETCORE_URLS
               value: "http://+:80"
-            # Tell the API its public-facing base path for link generation
-            - name: PathBase
-              value: "/catalog"
+
+            #  FIX: Support both HTTP/1.1 and HTTP/2
+            - name: ASPNETCORE_Kestrel__EndpointDefaults__Protocols
+              value: "Http1AndHttp2"
+
+            #  Removed PathBase (causing 404 issues with ingress)
+
           resources:
             requests:
               cpu: "100m"
@@ -50,7 +68,7 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
-          # Liveness probe so Kubernetes restarts stuck pods automatically
+
           livenessProbe:
             httpGet:
               path: /health
@@ -58,6 +76,7 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 15
             failureThreshold: 3
+
           readinessProbe:
             httpGet:
               path: /health/ready
