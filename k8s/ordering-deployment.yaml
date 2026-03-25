@@ -3,8 +3,12 @@ kind: Deployment
 metadata:
   name: ordering-api
   namespace: eshop
+  labels:
+    app: ordering-api
+
 spec:
   replicas: 2
+
   selector:
     matchLabels:
       app: ordering-api
@@ -17,22 +21,74 @@ spec:
     spec:
       containers:
         - name: ordering-api
-          image: pavankumarch1219/ordering-api:latest
+          image: pavankumarch1219/ordering-api:1.0.0
+          imagePullPolicy: IfNotPresent
 
           ports:
             - containerPort: 80
 
           env:
+            # 🔹 Environment
             - name: ASPNETCORE_ENVIRONMENT
               value: "Development"
 
-            # ✅ Use Secret for DB connection
+            # 🔹 Database
             - name: ConnectionStrings__orderingdb
               valueFrom:
                 secretKeyRef:
                   name: app-secret
                   key: ORDERING_DB
 
-            # ✅ RabbitMQ (correct as is)
+            # 🔹 RabbitMQ credentials
+            - name: RABBITMQ_USER
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: RABBITMQ_USER
+
+            - name: RABBITMQ_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: RABBITMQ_PASS
+
+            # 🔹 RabbitMQ host (ConfigMap recommended)
             - name: EventBus__HostName
               value: "rabbitmq"
+
+            - name: EventBus__UserName
+              value: "$(RABBITMQ_USER)"
+
+            - name: EventBus__Password
+              value: "$(RABBITMQ_PASS)"
+
+            # 🔹 ASP.NET binding
+            - name: ASPNETCORE_URLS
+              value: "http://+:80"
+
+            # 🔹 FIX: HTTP/1 + HTTP/2 support
+            - name: ASPNETCORE_Kestrel__EndpointDefaults__Protocols
+              value: "Http1AndHttp2"
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 80
+            initialDelaySeconds: 20
+            periodSeconds: 10
