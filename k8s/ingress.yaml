@@ -4,43 +4,60 @@ metadata:
   name: eshop-ingress
   namespace: eshop
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-
+    # Each path needs its own rewrite so the prefix is stripped correctly.
+    # Use capture groups: (.*) captures everything after the prefix.
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Increase proxy timeouts for Blazor SignalR connections
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    # Enable WebSocket support (required for Blazor Server)
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
 spec:
   ingressClassName: nginx
-
   rules:
   - http:
       paths:
-
-      - path: /
+      # Blazor frontend — serves at root, no rewrite needed
+      - path: /()(.*)
         pathType: Prefix
         backend:
           service:
             name: dotnet-app
             port:
               number: 80
-
-      - path: /catalog
+      # Catalog API — strips /catalog prefix before forwarding
+      - path: /catalog(/|$)(.*)
         pathType: Prefix
         backend:
           service:
             name: catalog-service
             port:
               number: 80
-
-      - path: /basket
+      # Basket API — strips /basket prefix before forwarding
+      - path: /basket(/|$)(.*)
         pathType: Prefix
         backend:
           service:
             name: basket-api
             port:
               number: 80
-
-      - path: /identity
+      # Identity — strips /identity prefix before forwarding
+      - path: /identity(/|$)(.*)
         pathType: Prefix
         backend:
           service:
             name: identity-service
+            port:
+              number: 80
+      # Ordering API — strips /ordering prefix before forwarding
+      - path: /ordering(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: ordering-service
             port:
               number: 80
