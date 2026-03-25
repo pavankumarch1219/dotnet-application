@@ -8,57 +8,31 @@ spec:
   selector:
     matchLabels:
       app: catalog-api
-
   template:
     metadata:
       labels:
         app: catalog-api
-
     spec:
       containers:
         - name: catalog-api
           image: pavankumarch1219/catalog-api:latest
-
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
-
           env:
-            # ✅ Postgres connection (already correct)
             - name: ConnectionStrings__catalogdb
               valueFrom:
                 secretKeyRef:
                   name: app-secret
                   key: CATALOG_DB
-
-            # ✅ FIX 1: RabbitMQ host (CRITICAL)
-            - name: RabbitMQ__HostName
-              value: rabbitmq
-
-            # ✅ FIX 2: RabbitMQ port
-            - name: RabbitMQ__Port
-              value: "5672"
-
-            # ✅ FIX 3: Credentials (default for RabbitMQ container)
-            - name: RabbitMQ__UserName
-              value: guest
-
-            - name: RabbitMQ__Password
-              value: guest
-
-            # ✅ ASP.NET config
+            - name: ConnectionStrings__EventBus
+              value: amqp://guest:guest@rabbitmq:5672
             - name: ASPNETCORE_URLS
               value: http://+:80
-
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 80
-            initialDelaySeconds: 10
-            periodSeconds: 10
-
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 80
-            initialDelaySeconds: 20
-            periodSeconds: 15
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
