@@ -3,9 +3,14 @@ kind: PersistentVolumeClaim
 metadata:
   name: postgres-pvc
   namespace: eshop
+
 spec:
   accessModes:
     - ReadWriteOnce
+
   resources:
     requests:
       storage: 1Gi
+
+  # Optional (recommended if needed)
+  # storageClassName: standard
