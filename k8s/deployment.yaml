@@ -21,14 +21,14 @@ spec:
     spec:
       containers:
         - name: dotnet-app
-          image: pavankumarch1219/dotnet-application:1.0.0   #  avoid latest
+          image: pavankumarch1219/dotnet-application:1.0.0
           imagePullPolicy: IfNotPresent
 
           ports:
-            - containerPort: 80   #  match ASP.NET default
+            - containerPort: 80
 
           env:
-            # Internal service URLs (K8s DNS)
+            # 🔹 Internal service URLs (via Kubernetes DNS)
             - name: IdentityUrl
               value: "http://identity-service"
 
@@ -41,19 +41,22 @@ spec:
             - name: OrderingUrl
               value: "http://ordering-service"
 
-            # RabbitMQ service
+            # 🔹 RabbitMQ (via ConfigMap preferred)
             - name: EventBusConnection
-              value: "rabbitmq"
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: RABBITMQ_HOST
 
-            # External callback (Ingress / NodePort / LB)
+            # 🔹 External callback (should match Ingress URL ideally)
             - name: CallBackUrl
               value: "http://20.29.210.83:32289"
 
-            # ASP.NET binding
+            # 🔹 ASP.NET Core binding
             - name: ASPNETCORE_URLS
               value: "http://+:80"
 
-            #  FIX: avoid HTTP/2 issue
+            # 🔹 Fix HTTP protocol issues
             - name: ASPNETCORE_Kestrel__EndpointDefaults__Protocols
               value: "Http1AndHttp2"
 
@@ -65,12 +68,14 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
+          # 🔹 Health checks (better endpoints if available)
           livenessProbe:
             httpGet:
               path: /
               port: 80
             initialDelaySeconds: 30
             periodSeconds: 15
+            failureThreshold: 3
 
           readinessProbe:
             httpGet:
@@ -78,3 +83,4 @@ spec:
               port: 80
             initialDelaySeconds: 20
             periodSeconds: 10
+            failureThreshold: 3
