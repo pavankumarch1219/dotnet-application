@@ -11,7 +11,7 @@ variables:
   value: eshop
 
 - name: imageTag
-  value: latest
+  value: 1.0.0
 
 - name: dockerHubRepo
   value: pavankumarch1219
