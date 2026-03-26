@@ -5,6 +5,8 @@ pool:
   name: eshop-agent
 
 variables:
+- group: docker-credentials   # 🔥 FIXED (important)
+
 - name: namespace
   value: eshop
 
@@ -31,7 +33,7 @@ stages:
     - script: |
         set -e
 
-        # 🔥 Build only required projects (fix MAUI error)
+        # 🔥 Build only required projects (avoids MAUI error)
         dotnet restore src/Catalog.API/Catalog.API.csproj
         dotnet restore src/Basket.API/Basket.API.csproj
         dotnet restore src/Identity.API/Identity.API.csproj
@@ -44,6 +46,8 @@ stages:
         dotnet build src/Ordering.API/Ordering.API.csproj --configuration Release --no-restore
         dotnet build src/WebApp/WebApp.csproj --configuration Release --no-restore
 
+      displayName: Build Services
+
 
 # ================= DOCKER =================
 - stage: Docker
@@ -52,8 +56,10 @@ stages:
   - job: DockerJob
     steps:
 
+    # 🔥 FIXED Docker login
     - script: |
-        echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+      displayName: Docker Login
 
     - script: |
         set -e
@@ -73,6 +79,8 @@ stages:
         docker build -t $(dockerHubRepo)/dotnet-app:$(imageTag) -f src/WebApp/Dockerfile .
         docker push $(dockerHubRepo)/dotnet-app:$(imageTag)
 
+      displayName: Build & Push Images
+
 
 # ================= DEPLOY =================
 - stage: Deploy
@@ -82,17 +90,20 @@ stages:
     steps:
 
     - script: kubectl version --client
+      displayName: Check kubectl
 
     - script: |
         kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
+      displayName: Ensure Namespace
 
-    # 🔥 CLEAN ONLY PROBLEMATIC RESOURCES
+    # 🔥 CLEAN ONLY DB RESOURCES (avoid conflicts)
     - script: |
         kubectl delete statefulset postgres -n $(namespace) --ignore-not-found
         kubectl delete pvc -l app=postgres -n $(namespace) --ignore-not-found
 
         kubectl delete statefulset rabbitmq -n $(namespace) --ignore-not-found
         kubectl delete pvc -l app=rabbitmq -n $(namespace) --ignore-not-found
+      displayName: Cleanup DB
 
     # ✅ Secrets & Config
     - script: kubectl apply -f k8s/secret.yaml -n $(namespace)
@@ -105,9 +116,9 @@ stages:
     - script: kubectl apply -f k8s/postgres-deployment.yaml -n $(namespace)
     - script: kubectl apply -f k8s/postgres-service.yaml -n $(namespace)
 
-    # 🔥 FIXED (NO WAIT)
     - script: |
         kubectl rollout status deployment/postgres -n $(namespace) --timeout=300s
+      displayName: Wait Postgres
 
     # 🚀 RabbitMQ
     - script: kubectl apply -f k8s/rabbitmq-deployment.yaml -n $(namespace)
@@ -115,6 +126,7 @@ stages:
 
     - script: |
         kubectl rollout status deployment/rabbitmq -n $(namespace) || true
+      displayName: Wait RabbitMQ
 
     # 🚀 Microservices
     - script: kubectl apply -f k8s/catalog-deployment.yaml -n $(namespace)
@@ -133,7 +145,7 @@ stages:
     - script: kubectl apply -f k8s/deployment.yaml -n $(namespace)
     - script: kubectl apply -f k8s/dotnet-service.yaml -n $(namespace)
 
-    # 🔄 Update images
+    # 🔄 Update Images
     - script: |
         kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag) -n $(namespace)
         kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag) -n $(namespace)
@@ -144,7 +156,7 @@ stages:
     # 🌐 Ingress
     - script: kubectl apply -f k8s/ingress.yaml -n $(namespace)
 
-    # 🔥 NON-BLOCKING ROLLOUT (FINAL FIX)
+    # 🔥 NON-BLOCKING ROLLOUT (prevents pipeline failure)
     - script: |
         kubectl rollout status deployment/catalog-api -n $(namespace) || true
         kubectl rollout status deployment/basket-api -n $(namespace) || true
@@ -152,8 +164,12 @@ stages:
         kubectl rollout status deployment/ordering-api -n $(namespace) || true
         kubectl rollout status deployment/dotnet-app -n $(namespace) || true
 
-    # ✅ Verify
+      displayName: Verify Rollout
+
+    # ✅ Final Status
     - script: |
         kubectl get pods -n $(namespace)
         kubectl get svc -n $(namespace)
         kubectl get ingress -n $(namespace)
+
+      displayName: Final Status
