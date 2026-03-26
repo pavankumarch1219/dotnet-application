@@ -7,7 +7,7 @@ metadata:
     app: dotnet-app
 
 spec:
-  replicas: 2
+  replicas: 1
 
   selector:
     matchLabels:
@@ -21,44 +21,33 @@ spec:
     spec:
       containers:
         - name: dotnet-app
-          image: pavankumarch1219/dotnet-application:1.0.0
-          imagePullPolicy: IfNotPresent
+          image: pavankumarch1219/dotnet-application:latest
+          imagePullPolicy: Always
 
           ports:
             - containerPort: 80
 
           env:
-            # 🔹 Internal service URLs (via Kubernetes DNS)
+            # 🔹 Internal services (DO NOT CHANGE)
             - name: IdentityUrl
-              value: "http://identity-service"
+              value: "http://identity-api"
 
             - name: CatalogUrl
-              value: "http://catalog-service"
+              value: "http://catalog-api"
 
             - name: BasketUrl
-              value: "http://basket-service"
+              value: "http://basket-api"
 
             - name: OrderingUrl
-              value: "http://ordering-service"
+              value: "http://ordering-api"
 
-            # 🔹 RabbitMQ (via ConfigMap preferred)
-            - name: EventBusConnection
-              valueFrom:
-                configMapKeyRef:
-                  name: app-config
-                  key: RABBITMQ_HOST
-
-            # 🔹 External callback (should match Ingress URL ideally)
+            # 🔥 UPDATED EXTERNAL URL
             - name: CallBackUrl
-              value: "http://20.29.210.83:32289"
+              value: "http://20.220.149.85"
 
-            # 🔹 ASP.NET Core binding
+            # ASP.NET binding
             - name: ASPNETCORE_URLS
               value: "http://+:80"
-
-            # 🔹 Fix HTTP protocol issues
-            - name: ASPNETCORE_Kestrel__EndpointDefaults__Protocols
-              value: "Http1AndHttp2"
 
           resources:
             requests:
@@ -68,19 +57,16 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
-          # 🔹 Health checks (better endpoints if available)
-          livenessProbe:
+          readinessProbe:
             httpGet:
               path: /
               port: 80
-            initialDelaySeconds: 30
-            periodSeconds: 15
-            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 5
 
-          readinessProbe:
+          livenessProbe:
             httpGet:
               path: /
               port: 80
             initialDelaySeconds: 20
             periodSeconds: 10
-            failureThreshold: 3
