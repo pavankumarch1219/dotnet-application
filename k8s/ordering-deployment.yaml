@@ -33,7 +33,7 @@ spec:
               value: "Development"
 
             # 🔹 Database
-            - name: ConnectionStrings__orderingdb
+            - name: ConnectionStrings__OrderingDb
               valueFrom:
                 secretKeyRef:
                   name: app-secret
