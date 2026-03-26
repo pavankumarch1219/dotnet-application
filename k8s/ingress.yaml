@@ -5,16 +5,7 @@ metadata:
   namespace: eshop
   annotations:
     nginx.ingress.kubernetes.io/use-regex: "true"
-
-    # Timeouts for Blazor / SignalR
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
-
-    # WebSocket support
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection "upgrade";
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
 
 spec:
   ingressClassName: nginx
@@ -23,16 +14,6 @@ spec:
     - http:
         paths:
 
-          #  Frontend (NO rewrite)
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: dotnet-app
-                port:
-                  number: 80
-
-          #  Catalog
           - path: /catalog(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
@@ -41,7 +22,6 @@ spec:
                 port:
                   number: 80
 
-          #  Basket
           - path: /basket(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
@@ -50,7 +30,6 @@ spec:
                 port:
                   number: 80
 
-          #  Identity
           - path: /identity(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
@@ -59,11 +38,18 @@ spec:
                 port:
                   number: 80
 
-          #  Ordering
           - path: /ordering(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
                 name: ordering-service
+                port:
+                  number: 80
+
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dotnet-app
                 port:
                   number: 80
