@@ -29,7 +29,7 @@ spec:
 
           env:
             # 🔹 Database (from secret)
-            - name: ConnectionStrings__identitydb
+            - name: ConnectionStrings__IdentityDb
               valueFrom:
                 secretKeyRef:
                   name: app-secret
