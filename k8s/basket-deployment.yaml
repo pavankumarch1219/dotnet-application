@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: basket-api
-          image: pavankumarch1219/basket-api:1.0.0
+          image: pavankumarch1219/basket-api:latest
           imagePullPolicy: IfNotPresent
 
           ports:
