@@ -37,7 +37,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: app-secret
-                  key: ORDERING_DB
+                  key: ConnectionStrings__OrderingDb
 
             # 🔹 RabbitMQ credentials
             - name: RABBITMQ_USER
