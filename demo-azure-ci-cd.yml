@@ -2,7 +2,7 @@ trigger:
   - main
 
 pool:
-  name: demo-pool
+  name: eshop-agent
 
 variables:
 - group: docker-credentials
