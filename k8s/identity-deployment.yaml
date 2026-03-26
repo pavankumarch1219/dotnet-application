@@ -33,7 +33,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: app-secret
-                  key: IDENTITY_DB
+                  key: ConnectionStrings__IdentityDb
 
             # 🔹 ASP.NET Core settings
             - name: ASPNETCORE_URLS
