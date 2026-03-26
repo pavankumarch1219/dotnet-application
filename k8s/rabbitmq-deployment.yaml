@@ -3,9 +3,9 @@ kind: Deployment
 metadata:
   name: rabbitmq
   namespace: eshop
-
 spec:
   replicas: 1
+
   selector:
     matchLabels:
       app: rabbitmq
@@ -28,21 +28,27 @@ spec:
 
           env:
             - name: RABBITMQ_DEFAULT_USER
-              value: "guest"
+              value: "admin"
             - name: RABBITMQ_DEFAULT_PASS
-              value: "guest"
+              value: "StrongPassword123!"
 
+          # ✅ Better readiness probe
           readinessProbe:
-            exec:
-              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            tcpSocket:
+              port: 5672
             initialDelaySeconds: 20
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
 
+          # ✅ Better liveness probe
           livenessProbe:
-            exec:
-              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            tcpSocket:
+              port: 5672
             initialDelaySeconds: 40
-            periodSeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 5
 
           volumeMounts:
             - name: rabbitmq-data
