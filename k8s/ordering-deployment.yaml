@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: ordering-api
-          image: pavankumarch1219/ordering-api:1.0.0
+          image: pavankumarch1219/ordering-api:latest
           imagePullPolicy: IfNotPresent
 
           ports:
