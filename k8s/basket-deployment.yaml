@@ -37,7 +37,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: app-secret
-                  key: BASKET_DB
+                  key:  ConnectionStrings__BasketDb
 
             - name: RABBITMQ_USER
               valueFrom:
