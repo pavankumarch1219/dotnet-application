@@ -29,7 +29,7 @@ spec:
 
           env:
             # 🔹 Database connection
-            - name: ConnectionStrings__catalogdb
+            - name: ConnectionStrings__CatalogDb
               valueFrom:
                 secretKeyRef:
                   name: app-secret
