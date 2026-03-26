@@ -5,22 +5,16 @@ pool:
   name: eshop-agent
 
 variables:
-- group: docker-credentials
-
-- name: dockerHubRepo
-  value: pavankumarch1219
-
-- name: imageTag
-  value: $(Build.BuildId)
-
 - name: namespace
   value: eshop
 
+- name: imageTag
+  value: latest
 
-# ================= BUILD =================
+
 stages:
+
 - stage: Build
-  displayName: Build Services
   jobs:
   - job: BuildJob
     steps:
@@ -28,34 +22,25 @@ stages:
     - task: UseDotNet@2
       inputs:
         packageType: sdk
-        version: 10.0.x
-        includePreviewVersions: true
+        version: 8.0.x
 
     - script: |
         set -e
-        dotnet restore src/Catalog.API/Catalog.API.csproj
-        dotnet restore src/Basket.API/Basket.API.csproj
-        dotnet restore src/Identity.API/Identity.API.csproj
-        dotnet restore src/Ordering.API/Ordering.API.csproj
-        dotnet restore src/WebApp/WebApp.csproj
-
-        dotnet build src/Catalog.API/Catalog.API.csproj --configuration Release --no-restore
-        dotnet build src/Basket.API/Basket.API.csproj --configuration Release --no-restore
-        dotnet build src/Identity.API/Identity.API.csproj --configuration Release --no-restore
-        dotnet build src/Ordering.API/Ordering.API.csproj --configuration Release --no-restore
-        dotnet build src/WebApp/WebApp.csproj --configuration Release --no-restore
-      displayName: Restore & Build
+        dotnet restore
+        dotnet build --configuration Release
 
 
-# ================= DOCKER =================
 - stage: Docker
-  displayName: Build & Push Images
   dependsOn: Build
   jobs:
-  - job: BuildPush
+  - job: DockerJob
     steps:
+
     - script: |
         echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+
+    - script: |
+        set -e
 
         docker build -t $(dockerHubRepo)/catalog-api:$(imageTag) -f src/Catalog.API/Dockerfile .
         docker push $(dockerHubRepo)/catalog-api:$(imageTag)
@@ -69,88 +54,76 @@ stages:
         docker build -t $(dockerHubRepo)/ordering-api:$(imageTag) -f src/Ordering.API/Dockerfile .
         docker push $(dockerHubRepo)/ordering-api:$(imageTag)
 
-        docker build -t $(dockerHubRepo)/dotnet-application:$(imageTag) -f src/WebApp/Dockerfile .
-        docker push $(dockerHubRepo)/dotnet-application:$(imageTag)
-      displayName: Build & Push Images
+        docker build -t $(dockerHubRepo)/dotnet-app:$(imageTag) -f src/WebApp/Dockerfile .
+        docker push $(dockerHubRepo)/dotnet-app:$(imageTag)
 
 
-# ================= DEPLOY =================
 - stage: Deploy
-  displayName: Deploy to Kubernetes
   dependsOn: Docker
   jobs:
   - job: DeployJob
     steps:
 
-    # ✅ kubectl check
     - script: kubectl version --client
-      displayName: Check kubectl
 
-    # ✅ Ensure namespace
     - script: |
         kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
-      displayName: Ensure Namespace
 
-    # 🔥 CLEAN OLD POSTGRES (IMPORTANT)
     - script: |
-        kubectl delete statefulset postgres -n $(namespace) --ignore-not-found
-        kubectl delete rs -l app=postgres -n $(namespace) --ignore-not-found
-      displayName: Cleanup Old Postgres
+        kubectl delete deployment --all -n $(namespace) || true
+        kubectl delete svc --all -n $(namespace) || true
+        kubectl delete pod --all -n $(namespace) || true
 
-    # ✅ Apply Secret
+    - script: kubectl apply -f k8s/secret.yaml -n $(namespace)
+    - script: kubectl apply -f k8s/rabbitmq-secret.yaml -n $(namespace)
+
+    - script: kubectl apply -f k8s/configmap.yaml -n $(namespace)
+    - script: kubectl apply -f k8s/postgres-init-configmap.yaml -n $(namespace)
+
+    - script: kubectl apply -f k8s/postgres-deployment.yaml -n $(namespace)
+    - script: kubectl apply -f k8s/postgres-service.yaml -n $(namespace)
+
     - script: |
-        kubectl apply -f k8s/secret.yaml -n $(namespace)
-      displayName: Apply Secret
+        kubectl wait --for=condition=ready pod -l app=postgres -n $(namespace) --timeout=300s
 
-    # ✅ Apply ConfigMaps
+    - script: kubectl apply -f k8s/rabbitmq-deployment.yaml -n $(namespace)
+    - script: kubectl apply -f k8s/rabbitmq-service.yaml -n $(namespace)
+
     - script: |
-        kubectl apply -f k8s/configmap.yaml -n $(namespace)
-        kubectl apply -f k8s/postgres-init-configmap.yaml -n $(namespace)
-      displayName: Apply ConfigMaps
+        kubectl wait --for=condition=ready pod -l app=rabbitmq -n $(namespace) --timeout=300s
 
-    # ❌ REMOVED PVC STEP (IMPORTANT FIX)
+    - script: kubectl apply -f k8s/catalog-deployment.yaml -n $(namespace)
+    - script: kubectl apply -f k8s/catalog-service.yaml -n $(namespace)
 
-    # ✅ Deploy Postgres ONLY
-    - script: |
-        kubectl apply -f k8s/postgres-deployment.yaml -n $(namespace)
-        kubectl apply -f k8s/postgres-service.yaml -n $(namespace)
-      displayName: Deploy Postgres
+    - script: kubectl apply -f k8s/basket-deployment.yaml -n $(namespace)
+    - script: kubectl apply -f k8s/basket-service.yaml -n $(namespace)
 
-    # 🔥 FIXED (NO MORE WAIT FAILURE)
-    - script: |
-        kubectl rollout status deployment/postgres -n $(namespace) --timeout=300s
-      displayName: Wait for Postgres Ready
+    - script: kubectl apply -f k8s/identity-deployment.yaml -n $(namespace)
+    - script: kubectl apply -f k8s/identity-service.yaml -n $(namespace)
 
-    # ✅ Deploy ALL services
-    - script: |
-        kubectl apply -f k8s/ -n $(namespace)
-      displayName: Apply Manifests
+    - script: kubectl apply -f k8s/ordering-deployment.yaml -n $(namespace)
+    - script: kubectl apply -f k8s/ordering-service.yaml -n $(namespace)
 
-    # ✅ Update images
+    - script: kubectl apply -f k8s/deployment.yaml -n $(namespace)
+    - script: kubectl apply -f k8s/dotnet-service.yaml -n $(namespace)
+
     - script: |
         kubectl set image deployment/catalog-api catalog-api=$(dockerHubRepo)/catalog-api:$(imageTag) -n $(namespace)
         kubectl set image deployment/basket-api basket-api=$(dockerHubRepo)/basket-api:$(imageTag) -n $(namespace)
         kubectl set image deployment/identity-api identity-api=$(dockerHubRepo)/identity-api:$(imageTag) -n $(namespace)
         kubectl set image deployment/ordering-api ordering-api=$(dockerHubRepo)/ordering-api:$(imageTag) -n $(namespace)
-        kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo)/dotnet-application:$(imageTag) -n $(namespace)
-      displayName: Update Images
+        kubectl set image deployment/dotnet-app dotnet-app=$(dockerHubRepo)/dotnet-app:$(imageTag) -n $(namespace)
 
-    # ✅ Restart apps
-    - script: |
-        kubectl rollout restart deployment -n $(namespace)
-      displayName: Restart Pods
+    - script: kubectl apply -f k8s/ingress.yaml -n $(namespace)
 
-    # ✅ Wait for rollout
     - script: |
         kubectl rollout status deployment/catalog-api -n $(namespace)
         kubectl rollout status deployment/basket-api -n $(namespace)
         kubectl rollout status deployment/identity-api -n $(namespace)
         kubectl rollout status deployment/ordering-api -n $(namespace)
         kubectl rollout status deployment/dotnet-app -n $(namespace)
-      displayName: Wait for Rollout
 
-    # ✅ Verify
     - script: |
         kubectl get pods -n $(namespace)
         kubectl get svc -n $(namespace)
-      displayName: Verify
+        kubectl get ingress -n $(namespace)
