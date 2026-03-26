@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: catalog-api
-          image: pavankumarch1219/catalog-api:1.0.0
+          image: pavankumarch1219/catalog-api:latest
           imagePullPolicy: IfNotPresent
 
           ports:
