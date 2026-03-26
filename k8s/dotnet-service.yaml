@@ -5,10 +5,12 @@ metadata:
   namespace: eshop
 
 spec:
-  type: ClusterIP
+  type: NodePort   # 🔥 changed
+
   selector:
     app: dotnet-app
 
   ports:
     - port: 80
       targetPort: 80
+      nodePort: 30007   # 🔥 external port
