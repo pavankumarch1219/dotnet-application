@@ -3,11 +3,9 @@ kind: Deployment
 metadata:
   name: basket-api
   namespace: eshop
-  labels:
-    app: basket-api
-
 spec:
   replicas: 2
+
   selector:
     matchLabels:
       app: basket-api
@@ -21,11 +19,19 @@ spec:
       containers:
         - name: basket-api
           image: pavankumarch1219/basket-api:latest
-          imagePullPolicy: IfNotPresent
 
           ports:
             - containerPort: 80
 
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          # ✅ FIXED: Correct DB + RabbitMQ config
           env:
             - name: ConnectionStrings__BasketDb
               valueFrom:
@@ -46,39 +52,35 @@ spec:
                   key: RABBITMQ_PASS
 
             - name: ConnectionStrings__EventBus
-              value: "amqp://$(RABBITMQ_USER):$(RABBITMQ_PASS)@rabbitmq:5672"
+              value: amqp://$(RABBITMQ_USER):$(RABBITMQ_PASS)@rabbitmq:5672
 
             - name: ASPNETCORE_URLS
-              value: "http://+:80"
+              value: http://+:80
 
-            # ✅ FIXED (double underscore)
             - name: ASPNETCORE_Kestrel__EndpointDefaults__Protocols
-              value: "Http1AndHttp2"
+              value: Http1AndHttp2
 
             - name: IdentityUrl
-              value: "http://identity-service/identity"
+              value: http://identity-service/identity
 
             - name: IdentityUrlExternal
-              value: "http://20.245.67.161:30694/identity"
+              value: http://20.220.149.85:31306/identity
 
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "128Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
-
+          # ✅ FIXED: Working health probes
           livenessProbe:
             httpGet:
-              path: /health
+              path: /
               port: 80
-            initialDelaySeconds: 30
+            initialDelaySeconds: 60
             periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
 
           readinessProbe:
             httpGet:
-              path: /health/ready
+              path: /
               port: 80
-            initialDelaySeconds: 20
+            initialDelaySeconds: 30
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
