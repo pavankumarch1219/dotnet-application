@@ -3,12 +3,9 @@ kind: Deployment
 metadata:
   name: postgres
   namespace: eshop
-  labels:
-    app: postgres
 
 spec:
   replicas: 1
-
   selector:
     matchLabels:
       app: postgres
@@ -43,11 +40,9 @@ spec:
                   key: POSTGRES_PASSWORD
 
           volumeMounts:
-            #  FIX: Use PVC (persistent storage)
             - mountPath: /var/lib/postgresql/data
               name: postgres-storage
 
-            #  init script
             - mountPath: /docker-entrypoint-initdb.d
               name: postgres-init
 
@@ -72,10 +67,8 @@ spec:
             periodSeconds: 5
 
       volumes:
-        #  FIXED: use PVC instead of emptyDir
         - name: postgres-storage
-          persistentVolumeClaim:
-            claimName: postgres-pvc
+          emptyDir: {}
 
         - name: postgres-init
           configMap:
