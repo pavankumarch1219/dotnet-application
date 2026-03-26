@@ -3,12 +3,7 @@ kind: Service
 metadata:
   name: rabbitmq
   namespace: eshop
-  labels:
-    app: rabbitmq
-
 spec:
-  type: ClusterIP
-
   selector:
     app: rabbitmq
 
@@ -20,3 +15,5 @@ spec:
     - name: management
       port: 15672
       targetPort: 15672
+
+  type: ClusterIP
