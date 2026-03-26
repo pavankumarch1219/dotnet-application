@@ -1,13 +1,11 @@
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: rabbitmq
   namespace: eshop
 
 spec:
-  serviceName: rabbitmq
   replicas: 1
-
   selector:
     matchLabels:
       app: rabbitmq
@@ -31,7 +29,6 @@ spec:
           env:
             - name: RABBITMQ_DEFAULT_USER
               value: "guest"
-
             - name: RABBITMQ_DEFAULT_PASS
               value: "guest"
 
@@ -53,5 +50,4 @@ spec:
 
       volumes:
         - name: rabbitmq-data
-          persistentVolumeClaim:
-            claimName: rabbitmq-pvc
+          emptyDir: {}
