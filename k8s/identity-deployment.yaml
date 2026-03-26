@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: identity-api
-          image: pavankumarch1219/identity-api:1.0.0   # ✅ avoid latest
+          image: pavankumarch1219/identity-api:latest   # ✅ avoid latest
           imagePullPolicy: IfNotPresent
 
           ports:
