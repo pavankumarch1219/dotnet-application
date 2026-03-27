@@ -1,10 +1,29 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Service
 metadata:
   name: dotnet-app
   namespace: eshop
   labels:
     app: dotnet-app
+
+spec:
+  type: NodePort   # 🔥 external access
+
+  selector:
+    app: dotnet-app
+
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      nodePort: 30007
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dotnet-app
+  namespace: eshop
 
 spec:
   replicas: 1
@@ -22,32 +41,25 @@ spec:
       containers:
         - name: dotnet-app
           image: pavankumarch1219/dotnet-application:latest
-          imagePullPolicy: Always
 
           ports:
             - containerPort: 80
 
           env:
-            # 🔹 Internal services (DO NOT CHANGE)
             - name: IdentityUrl
-              value: "http://identity-api"
+              value: http://identity-service
 
             - name: CatalogUrl
-              value: "http://catalog-api"
+              value: http://catalog-service
 
             - name: BasketUrl
-              value: "http://basket-api"
+              value: http://basket-service
 
             - name: OrderingUrl
-              value: "http://ordering-api"
+              value: http://ordering-service
 
-            # 🔥 UPDATED EXTERNAL URL
-            - name: CallBackUrl
-              value: "http://20.220.149.85"
-
-            # ASP.NET binding
             - name: ASPNETCORE_URLS
-              value: "http://+:80"
+              value: http://+:80
 
           resources:
             requests:
@@ -57,16 +69,27 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
+          # ✅ Startup probe (prevents CrashLoopBackOff)
+          startupProbe:
+            httpGet:
+              path: /
+              port: 80
+            failureThreshold: 30
+            periodSeconds: 5
+
+          # ✅ Readiness probe (added)
           readinessProbe:
             httpGet:
               path: /
               port: 80
             initialDelaySeconds: 10
-            periodSeconds: 5
+            periodSeconds: 10
 
+          # ✅ Liveness probe (added)
           livenessProbe:
             httpGet:
               path: /
               port: 80
-            initialDelaySeconds: 20
-            periodSeconds: 10
+            initialDelaySeconds: 30
+            periodSeconds: 15
+
