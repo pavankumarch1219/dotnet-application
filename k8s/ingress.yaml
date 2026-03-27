@@ -8,11 +8,6 @@ metadata:
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /$2
 
-    # ✅ Keep timeouts
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
-
 spec:
   ingressClassName: nginx
 
@@ -20,6 +15,7 @@ spec:
     - http:
         paths:
 
+          # 🌐 Web App
           - path: /
             pathType: Prefix
             backend:
@@ -28,6 +24,7 @@ spec:
                 port:
                   number: 80
 
+          # 📦 Catalog
           - path: /catalog(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
@@ -36,6 +33,7 @@ spec:
                 port:
                   number: 80
 
+          # 🧺 Basket
           - path: /basket(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
@@ -44,6 +42,7 @@ spec:
                 port:
                   number: 80
 
+          # 🔐 Identity
           - path: /identity(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
@@ -52,6 +51,7 @@ spec:
                 port:
                   number: 80
 
+          # 📦 Ordering
           - path: /ordering(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
