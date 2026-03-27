@@ -22,6 +22,7 @@ kind: Deployment
 metadata:
   name: basket-api
   namespace: eshop
+
 spec:
   replicas: 2
 
@@ -49,7 +50,6 @@ spec:
                   name: app-secret
                   key: ConnectionStrings__BasketDb
 
-            # ✅ RabbitMQ (fixed)
             - name: ConnectionStrings__EventBus
               value: amqp://guest:guest@rabbitmq:5672
 
@@ -67,26 +67,24 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
-          # Startup probe (prevents CrashLoopBackOff)
+          # ✅ FIXED: use /health instead of /
           startupProbe:
             httpGet:
-              path: /
+              path: /health
               port: 80
             failureThreshold: 30
             periodSeconds: 5
 
-          # Readiness probe
           readinessProbe:
             httpGet:
-              path: /
+              path: /health
               port: 80
             initialDelaySeconds: 10
             periodSeconds: 10
 
-          # Liveness probe
           livenessProbe:
             httpGet:
-              path: /
+              path: /health
               port: 80
             initialDelaySeconds: 30
             periodSeconds: 15
