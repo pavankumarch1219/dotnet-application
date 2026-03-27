@@ -8,18 +8,15 @@ metadata:
   namespace: eshop
   labels:
     app: dotnet-app
-
 spec:
   type: NodePort
   selector:
     app: dotnet-app
-
   ports:
     - name: http
       port: 80
       targetPort: 80
       nodePort: 30007
-
 ---
 # =========================
 # 🌐 DOTNET DEPLOYMENT
@@ -29,19 +26,15 @@ kind: Deployment
 metadata:
   name: dotnet-app
   namespace: eshop
-
 spec:
   replicas: 1
-
   selector:
     matchLabels:
       app: dotnet-app
-
   template:
     metadata:
       labels:
         app: dotnet-app
-
     spec:
       # =========================
       # 🔥 WAIT FOR REDIS
@@ -59,47 +52,43 @@ spec:
                 sleep 2;
               done;
               echo "Redis is ready";
-
       containers:
         - name: dotnet-app
           image: pavankumarch1219/dotnet-application:latest
-
           ports:
             - containerPort: 80
-
           env:
             # =========================
             # 🔧 CORE SETTINGS
             # =========================
             - name: ASPNETCORE_URLS
-              value: http://+:80
+              value: "http://+:80"
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Development"
 
             # =========================
             # 🔗 INTERNAL SERVICES
             # =========================
             - name: IdentityUrl
-              value: http://identity-service
-
+              value: "http://identity-service"
             - name: CatalogUrl
-              value: http://catalog-service
-
+              value: "http://catalog-service"
             - name: BasketUrl
-              value: http://basket-service
-
+              value: "http://basket-service"
             - name: OrderingUrl
-              value: http://ordering-service
+              value: "http://ordering-service"
 
             # =========================
             # 🔴 REDIS
             # =========================
             - name: ConnectionStrings__Redis
-              value: redis
+              value: "redis:6379"
 
             # =========================
-            # 🔥 CRITICAL FIX (FINAL)
+            # 🔁 OIDC CALLBACK
             # =========================
-            - name: ASPNETCORE_CallBackUrl
-              value: http://20.220.149.85:30007
+            - name: CallBackUrl
+              value: "http://20.220.149.85:30007"
 
           resources:
             requests:
@@ -117,13 +106,11 @@ spec:
               port: 80
             failureThreshold: 30
             periodSeconds: 5
-
           readinessProbe:
             tcpSocket:
               port: 80
             initialDelaySeconds: 10
             periodSeconds: 10
-
           livenessProbe:
             tcpSocket:
               port: 80
