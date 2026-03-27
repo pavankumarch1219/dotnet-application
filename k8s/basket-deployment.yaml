@@ -3,18 +3,14 @@ kind: Service
 metadata:
   name: basket-service
   namespace: eshop
-  labels:
-    app: basket-api
 
 spec:
   type: ClusterIP
-
   selector:
     app: basket-api
 
   ports:
-    - name: grpc
-      port: 80
+    - port: 80
       targetPort: 80
 
 ---
@@ -37,6 +33,20 @@ spec:
         app: basket-api
 
     spec:
+      # 🔥 WAIT FOR REDIS
+      initContainers:
+        - name: wait-for-redis
+          image: busybox
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z redis 6379;
+              do
+                echo "Waiting for Redis...";
+                sleep 2;
+              done;
+
       containers:
         - name: basket-api
           image: pavankumarch1219/basket-api:latest
@@ -45,22 +55,18 @@ spec:
             - containerPort: 80
 
           env:
-            # 🔥 DATABASE / REDIS
             - name: ConnectionStrings__Redis
               value: redis
 
-            # 🔥 RABBITMQ
             - name: ConnectionStrings__EventBus
               value: amqp://guest:guest@rabbitmq:5672
 
-            # 🔥 FORCE HTTP/2 (VERY IMPORTANT)
             - name: ASPNETCORE_URLS
               value: http://+:80
 
             - name: ASPNETCORE_Kestrel__EndpointDefaults__Protocols
               value: Http2
 
-            # 🔥 IDENTITY
             - name: Identity__Audience
               value: basket
 
@@ -72,21 +78,18 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
-          # ✅ FIXED (gRPC safe)
+          # ✅ gRPC SAFE
           startupProbe:
             tcpSocket:
               port: 80
             failureThreshold: 30
-            periodSeconds: 5
 
           readinessProbe:
             tcpSocket:
               port: 80
             initialDelaySeconds: 10
-            periodSeconds: 10
 
           livenessProbe:
             tcpSocket:
               port: 80
             initialDelaySeconds: 30
-            periodSeconds: 15
