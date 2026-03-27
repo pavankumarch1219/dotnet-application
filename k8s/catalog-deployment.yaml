@@ -3,8 +3,6 @@ kind: Service
 metadata:
   name: catalog-service
   namespace: eshop
-  labels:
-    app: catalog-api
 
 spec:
   type: ClusterIP
@@ -12,8 +10,7 @@ spec:
     app: catalog-api
 
   ports:
-    - name: http
-      port: 80
+    - port: 80
       targetPort: 80
 
 ---
@@ -36,6 +33,11 @@ spec:
         app: catalog-api
 
     spec:
+      initContainers:
+        - name: wait-for-redis
+          image: busybox
+          command: ["sh", "-c", "until nc -z redis 6379; do echo waiting for redis; sleep 2; done"]
+
       containers:
         - name: catalog-api
           image: pavankumarch1219/catalog-api:latest
@@ -50,42 +52,27 @@ spec:
                   name: app-secret
                   key: ConnectionStrings__CatalogDb
 
-            # ✅ RabbitMQ fixed
+            - name: ConnectionStrings__Redis
+              value: redis
+
             - name: ConnectionStrings__EventBus
               value: amqp://guest:guest@rabbitmq:5672
 
             - name: ASPNETCORE_URLS
               value: http://+:80
 
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "128Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
-
-          # ✅ Startup probe (prevents CrashLoopBackOff)
+          # ✅ FIXED PROBES
           startupProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: 80
             failureThreshold: 30
-            periodSeconds: 5
 
-          # ✅ Readiness probe
           readinessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: 80
             initialDelaySeconds: 10
-            periodSeconds: 10
 
-          # ✅ Liveness probe (added for stability)
           livenessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: 80
             initialDelaySeconds: 30
-            periodSeconds: 15
-
