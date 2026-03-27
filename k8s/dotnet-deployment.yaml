@@ -1,3 +1,6 @@
+# =========================
+# 🌐 DOTNET SERVICE
+# =========================
 apiVersion: v1
 kind: Service
 metadata:
@@ -12,11 +15,15 @@ spec:
     app: dotnet-app
 
   ports:
-    - port: 80
+    - name: http
+      port: 80
       targetPort: 80
       nodePort: 30007
 
 ---
+# =========================
+# 🌐 DOTNET DEPLOYMENT
+# =========================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -36,7 +43,7 @@ spec:
         app: dotnet-app
 
     spec:
-      # 🔥 WAIT FOR REDIS
+      # 🔥 WAIT FOR REDIS (prevents startup crash)
       initContainers:
         - name: wait-for-redis
           image: busybox
@@ -59,10 +66,15 @@ spec:
             - containerPort: 80
 
           env:
+            # =========================
+            # 🔧 CORE SETTINGS
+            # =========================
             - name: ASPNETCORE_URLS
               value: http://+:80
 
-            # ✅ SERVICE URLs
+            # =========================
+            # 🔗 INTERNAL SERVICES
+            # =========================
             - name: IdentityUrl
               value: http://identity-service
 
@@ -75,9 +87,17 @@ spec:
             - name: OrderingUrl
               value: http://ordering-service
 
+            # =========================
             # 🔴 REDIS
+            # =========================
             - name: ConnectionStrings__Redis
               value: redis
+
+            # =========================
+            # 🔥 CRITICAL FIX (NO CRASH)
+            # =========================
+            - name: CallBackUrl
+              value: http://20.220.149.85:30007
 
           resources:
             requests:
@@ -87,7 +107,9 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
-          # ✅ SAFE PROBES (NO 404 / NO CRASH)
+          # =========================
+          # ✅ STABLE PROBES (NO 404)
+          # =========================
           startupProbe:
             tcpSocket:
               port: 80
