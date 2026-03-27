@@ -16,14 +16,53 @@ variables:
 - name: imageTag
   value: latest
 
-
 stages:
+
+# =========================
+# 🔍 SONARQUBE ANALYSIS
+# =========================
+- stage: SonarQube
+  displayName: Code Quality Check
+  jobs:
+  - job: SonarJob
+    steps:
+
+    # Prepare SonarQube
+    - task: SonarQubePrepare@7
+      inputs:
+        SonarQube: 'sonar-sc'   
+        scannerMode: 'MSBuild'
+        projectKey: 'eshop-project'
+        projectName: 'eshop-project'
+
+    # Restore dependencies
+    - script: dotnet restore
+      displayName: Restore
+
+    # Build solution
+    - script: dotnet build --no-restore
+      displayName: Build
+
+    # (Optional but recommended)
+    - script: dotnet test --no-build
+      displayName: Run Tests
+
+    # Run analysis
+    - task: SonarQubeAnalyze@7
+
+    # Publish Quality Gate result
+    - task: SonarQubePublish@7
+      inputs:
+        pollingTimeoutSec: '300'
+
 
 # =========================
 # 🐳 DOCKER BUILD & PUSH
 # =========================
 - stage: Docker
   displayName: Build & Push Images
+  dependsOn: SonarQube
+  condition: succeeded()   # ✅ only if Sonar passes
   jobs:
   - job: DockerJob
     steps:
@@ -98,7 +137,7 @@ stages:
         kubectl rollout status deployment/rabbitmq -n $(namespace) --timeout=300s
 
     # =========================
-    # 🔴 REDIS (NEW - IMPORTANT)
+    # 🔴 REDIS
     # =========================
     - script: kubectl apply -f k8s/redis-deployment.yaml -n $(namespace)
 
