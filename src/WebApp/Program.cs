@@ -7,27 +7,21 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-// 🔐 AUTH (SAFE CONFIG)
+// ✅ AUTH — .AddCookie() is already registered by AddServiceDefaults(), do NOT call it again
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = "oidc";
 })
-.AddCookie()
 .AddOpenIdConnect("oidc", options =>
 {
-    options.Authority = "http://identity-service"; // internal K8s service
-
+    options.Authority = builder.Configuration["IdentityUrl"] ?? "http://identity-service";
     options.ClientId = "webapp";
     options.ResponseType = "code";
-
     options.SaveTokens = true;
     options.RequireHttpsMetadata = false;
-
     options.Scope.Add("openid");
     options.Scope.Add("profile");
-
-    // 🔥 IMPORTANT: prevent crash if identity not ready
     options.Events.OnRemoteFailure = context =>
     {
         context.HandleResponse();
@@ -47,34 +41,22 @@ var app = builder.Build();
 
 app.MapDefaultEndpoints();
 
-// =========================
-// 🔧 PIPELINE
-// =========================
+// ✅ No HTTPS redirection — pod runs HTTP-only inside K8s
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
-    app.UseHsts();
 }
 
-app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseAntiforgery();
 
-// 🔐 AUTH MIDDLEWARE
+// ✅ Auth middleware in correct order
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ❌ REMOVED FORCED LOGIN (THIS WAS CRASH CAUSE)
-
-// =========================
-// 🌐 UI
-// =========================
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
-// =========================
-// 🔁 FORWARDER (FIXED)
-// =========================
 app.MapForwarder(
     "/product-images/{id}",
     "http://catalog-service",
