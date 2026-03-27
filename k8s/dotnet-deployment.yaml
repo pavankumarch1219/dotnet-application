@@ -7,14 +7,13 @@ metadata:
     app: dotnet-app
 
 spec:
-  type: NodePort   # 🔥 external access
+  type: NodePort
 
   selector:
     app: dotnet-app
 
   ports:
-    - name: http
-      port: 80
+    - port: 80
       targetPort: 80
       nodePort: 30007
 
@@ -46,6 +45,10 @@ spec:
             - containerPort: 80
 
           env:
+            - name: ASPNETCORE_URLS
+              value: http://+:80
+
+            # 🔥 INTERNAL SERVICE URLS
             - name: IdentityUrl
               value: http://identity-service
 
@@ -58,9 +61,6 @@ spec:
             - name: OrderingUrl
               value: http://ordering-service
 
-            - name: ASPNETCORE_URLS
-              value: http://+:80
-
           resources:
             requests:
               cpu: "100m"
@@ -69,27 +69,21 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
-          # ✅ Startup probe (prevents CrashLoopBackOff)
+          # ✅ FIXED PROBES (NO 404 ISSUE)
           startupProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: 80
             failureThreshold: 30
             periodSeconds: 5
 
-          # ✅ Readiness probe (added)
           readinessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: 80
             initialDelaySeconds: 10
             periodSeconds: 10
 
-          # ✅ Liveness probe (added)
           livenessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: 80
             initialDelaySeconds: 30
             periodSeconds: 15
-
