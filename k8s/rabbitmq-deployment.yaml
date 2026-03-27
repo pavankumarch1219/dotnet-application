@@ -1,3 +1,6 @@
+# =========================
+# 🐰 RABBITMQ SERVICE
+# =========================
 apiVersion: v1
 kind: Service
 metadata:
@@ -8,6 +11,7 @@ metadata:
 
 spec:
   type: ClusterIP
+
   selector:
     app: rabbitmq
 
@@ -21,6 +25,9 @@ spec:
       targetPort: 15672
 
 ---
+# =========================
+# 🐰 RABBITMQ DEPLOYMENT
+# =========================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -49,12 +56,16 @@ spec:
             - containerPort: 15672
 
           env:
-            # ✅ MUST match your apps
+            # ✅ USE CUSTOM USER (IMPORTANT)
             - name: RABBITMQ_DEFAULT_USER
-              value: guest
+              value: admin
 
             - name: RABBITMQ_DEFAULT_PASS
-              value: guest
+              value: StrongPassword123!
+
+            # ✅ DEFAULT VHOST
+            - name: RABBITMQ_DEFAULT_VHOST
+              value: /
 
           resources:
             requests:
@@ -64,19 +75,21 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
-          # ✅ Startup probe (prevents early failure)
+          # ✅ STARTUP PROBE
           startupProbe:
             tcpSocket:
               port: 5672
             failureThreshold: 30
             periodSeconds: 5
 
+          # ✅ READINESS PROBE
           readinessProbe:
             tcpSocket:
               port: 5672
             initialDelaySeconds: 20
             periodSeconds: 10
 
+          # ✅ LIVENESS PROBE
           livenessProbe:
             tcpSocket:
               port: 5672
