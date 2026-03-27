@@ -1,6 +1,5 @@
 using eShop.WebApp.Components;
 using eShop.ServiceDefaults;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 
@@ -8,7 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-// 🔐 AUTH
+// 🔐 AUTH (SAFE CONFIG)
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
@@ -17,7 +16,7 @@ builder.Services.AddAuthentication(options =>
 .AddCookie()
 .AddOpenIdConnect("oidc", options =>
 {
-    options.Authority = "http://identity-service"; // internal service
+    options.Authority = "http://identity-service"; // internal K8s service
 
     options.ClientId = "webapp";
     options.ResponseType = "code";
@@ -27,6 +26,14 @@ builder.Services.AddAuthentication(options =>
 
     options.Scope.Add("openid");
     options.Scope.Add("profile");
+
+    // 🔥 IMPORTANT: prevent crash if identity not ready
+    options.Events.OnRemoteFailure = context =>
+    {
+        context.HandleResponse();
+        context.Response.Redirect("/");
+        return Task.CompletedTask;
+    };
 });
 
 builder.Services.AddAuthorization();
@@ -40,6 +47,9 @@ var app = builder.Build();
 
 app.MapDefaultEndpoints();
 
+// =========================
+// 🔧 PIPELINE
+// =========================
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
@@ -54,23 +64,17 @@ app.UseAntiforgery();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// 🔥 SAFE LOGIN MIDDLEWARE (FIXED NULL + ERROR)
-app.Use(async (context, next) =>
-{
-    if (context.User?.Identity == null || !context.User.Identity.IsAuthenticated)
-    {
-        await context.ChallengeAsync("oidc");
-        return;
-    }
+// ❌ REMOVED FORCED LOGIN (THIS WAS CRASH CAUSE)
 
-    await next();
-});
-
-// UI
+// =========================
+// 🌐 UI
+// =========================
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
-// API Forwarder
+// =========================
+// 🔁 FORWARDER (FIXED)
+// =========================
 app.MapForwarder(
     "/product-images/{id}",
     "http://catalog-service",
