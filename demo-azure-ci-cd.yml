@@ -1,4 +1,4 @@
-trigger: none
+trigger:
 - main
 
 pool:
@@ -28,7 +28,6 @@ stages:
   - job: DockerJob
     steps:
 
-    # Login to DockerHub
     - script: |
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
       displayName: Docker Login
@@ -36,27 +35,21 @@ stages:
         DOCKER_USERNAME: $(DOCKER_USERNAME)
         DOCKER_PASSWORD: $(DOCKER_PASSWORD)
 
-    # Build & Push only required services
     - script: |
         set -e
 
-        echo "Building Catalog API..."
         docker build -t $(dockerRepo)/catalog-api:latest -f src/Catalog.API/Dockerfile .
         docker push $(dockerRepo)/catalog-api:latest
 
-        echo "Building Basket API..."
         docker build -t $(dockerRepo)/basket-api:latest -f src/Basket.API/Dockerfile .
         docker push $(dockerRepo)/basket-api:latest
 
-        echo "Building Identity API..."
         docker build -t $(dockerRepo)/identity-api:latest -f src/Identity.API/Dockerfile .
         docker push $(dockerRepo)/identity-api:latest
 
-        echo "Building Ordering API..."
         docker build -t $(dockerRepo)/ordering-api:latest -f src/Ordering.API/Dockerfile .
         docker push $(dockerRepo)/ordering-api:latest
 
-        echo "Building Web App..."
         docker build -t $(dockerRepo)/dotnet-application:latest -f src/WebApp/Dockerfile .
         docker push $(dockerRepo)/dotnet-application:latest
 
@@ -82,16 +75,12 @@ stages:
         kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
 
     # =========================
-    # CONFIG
+    # SECRETS
     # =========================
-    - script: kubectl apply -f k8s/namespace.yaml
     - script: kubectl apply -f k8s/secret.yaml -n $(namespace)
-    - script: kubectl apply -f k8s/rabbitmq-secret.yaml -n $(namespace)
-    - script: kubectl apply -f k8s/configmap.yaml -n $(namespace)
-    - script: kubectl apply -f k8s/postgres-init-configmap.yaml -n $(namespace)
 
     # =========================
-    # POSTGRES
+    # 🐘 POSTGRES
     # =========================
     - script: kubectl apply -f k8s/postgres-deployment.yaml -n $(namespace)
 
@@ -100,7 +89,7 @@ stages:
         kubectl rollout status deployment/postgres -n $(namespace) --timeout=300s
 
     # =========================
-    # RABBITMQ
+    # 🐰 RABBITMQ
     # =========================
     - script: kubectl apply -f k8s/rabbitmq-deployment.yaml -n $(namespace)
 
@@ -109,7 +98,16 @@ stages:
         kubectl rollout status deployment/rabbitmq -n $(namespace) --timeout=300s
 
     # =========================
-    # MICROSERVICES
+    # 🔴 REDIS (NEW - IMPORTANT)
+    # =========================
+    - script: kubectl apply -f k8s/redis-deployment.yaml -n $(namespace)
+
+    - script: |
+        echo "Waiting for Redis..."
+        kubectl rollout status deployment/redis -n $(namespace) --timeout=120s
+
+    # =========================
+    # 🧩 MICROSERVICES
     # =========================
     - script: kubectl apply -f k8s/catalog-deployment.yaml -n $(namespace)
     - script: kubectl apply -f k8s/basket-deployment.yaml -n $(namespace)
@@ -117,20 +115,24 @@ stages:
     - script: kubectl apply -f k8s/ordering-deployment.yaml -n $(namespace)
 
     # =========================
-    # WEB APP
+    # 🌐 WEB APP
     # =========================
     - script: kubectl apply -f k8s/dotnet-deployment.yaml -n $(namespace)
 
     # =========================
-    # INGRESS
+    # 🌍 INGRESS
     # =========================
     - script: kubectl apply -f k8s/ingress.yaml -n $(namespace)
 
     # =========================
-    # VERIFY
+    # 📊 VERIFY
     # =========================
     - script: |
-        echo "Deployment Status:"
+        echo "===== PODS ====="
         kubectl get pods -n $(namespace)
+
+        echo "===== SERVICES ====="
         kubectl get svc -n $(namespace)
+
+        echo "===== INGRESS ====="
         kubectl get ingress -n $(namespace)
