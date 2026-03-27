@@ -1,3 +1,6 @@
+# =========================
+# 🐘 POSTGRES SERVICE
+# =========================
 apiVersion: v1
 kind: Service
 metadata:
@@ -8,6 +11,7 @@ metadata:
 
 spec:
   type: ClusterIP
+
   selector:
     app: postgres
 
@@ -17,6 +21,40 @@ spec:
       targetPort: 5432
 
 ---
+# =========================
+# 🐘 POSTGRES INIT CONFIGMAP (SAFE)
+# =========================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: eshop
+
+data:
+  init.sql: |
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'catalogdb') THEN
+        CREATE DATABASE catalogdb;
+      END IF;
+
+      IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'basketdb') THEN
+        CREATE DATABASE basketdb;
+      END IF;
+
+      IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'identitydb') THEN
+        CREATE DATABASE identitydb;
+      END IF;
+
+      IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'orderingdb') THEN
+        CREATE DATABASE orderingdb;
+      END IF;
+    END $$;
+
+---
+# =========================
+# 🐘 POSTGRES DEPLOYMENT
+# =========================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -59,11 +97,15 @@ spec:
                   name: app-secret
                   key: POSTGRES_PASSWORD
 
+            # ✅ IMPORTANT FIX
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+
           volumeMounts:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data
 
-            # ✅ mount init script (IMPORTANT)
+            # ✅ INIT SCRIPT MOUNT
             - name: postgres-init
               mountPath: /docker-entrypoint-initdb.d
 
@@ -75,19 +117,21 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
-          # ✅ Better startup handling
+          # ✅ STARTUP PROBE
           startupProbe:
             exec:
               command: ["pg_isready", "-U", "postgres"]
             failureThreshold: 30
             periodSeconds: 5
 
+          # ✅ READINESS PROBE
           readinessProbe:
             exec:
               command: ["pg_isready", "-U", "postgres"]
             initialDelaySeconds: 20
             periodSeconds: 10
 
+          # ✅ LIVENESS PROBE
           livenessProbe:
             exec:
               command: ["pg_isready", "-U", "postgres"]
@@ -95,10 +139,10 @@ spec:
             periodSeconds: 15
 
       volumes:
+        # ⚠️ DEV STORAGE (OK for you)
         - name: postgres-storage
           emptyDir: {}
 
-        # ✅ attach init configmap
         - name: postgres-init
           configMap:
             name: postgres-init
