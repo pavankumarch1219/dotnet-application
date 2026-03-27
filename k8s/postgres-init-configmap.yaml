@@ -6,21 +6,7 @@ metadata:
 
 data:
   init.sql: |
-    DO $$
-    BEGIN
-      IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'catalogdb') THEN
-        CREATE DATABASE catalogdb;
-      END IF;
-
-      IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'basketdb') THEN
-        CREATE DATABASE basketdb;
-      END IF;
-
-      IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'identitydb') THEN
-        CREATE DATABASE identitydb;
-      END IF;
-
-      IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'orderingdb') THEN
-        CREATE DATABASE orderingdb;
-      END IF;
-    END $$;
+    CREATE DATABASE catalogdb;
+    CREATE DATABASE basketdb;
+    CREATE DATABASE identitydb;
+    CREATE DATABASE orderingdb;
