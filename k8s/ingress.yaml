@@ -29,7 +29,7 @@ spec:
             pathType: ImplementationSpecific
             backend:
               service:
-                name: catalog-service
+                name: catalog-api
                 port:
                   number: 80
 
@@ -38,7 +38,7 @@ spec:
             pathType: ImplementationSpecific
             backend:
               service:
-                name: basket-service
+                name: basket-api
                 port:
                   number: 80
 
@@ -47,7 +47,7 @@ spec:
             pathType: ImplementationSpecific
             backend:
               service:
-                name: identity-service
+                name: identity-api
                 port:
                   number: 80
 
@@ -56,6 +56,6 @@ spec:
             pathType: ImplementationSpecific
             backend:
               service:
-                name: ordering-service
+                name: ordering-api
                 port:
                   number: 80
