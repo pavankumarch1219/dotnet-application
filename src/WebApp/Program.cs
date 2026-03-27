@@ -2,12 +2,15 @@ using eShop.WebApp.Components;
 using eShop.ServiceDefaults;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-// ✅ AUTH — .AddCookie() is already registered by AddServiceDefaults(), do NOT call it again
+// ✅ Read callback URL from env (set in deployment)
+var callbackUrl = builder.Configuration["CallBackUrl"] ?? "http://20.220.149.85:30007";
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
@@ -15,13 +18,27 @@ builder.Services.AddAuthentication(options =>
 })
 .AddOpenIdConnect("oidc", options =>
 {
-    options.Authority = builder.Configuration["IdentityUrl"] ?? "http://identity-service";
+    options.Authority = builder.Configuration["IdentityUrl"] ?? "http://identity-api";
     options.ClientId = "webapp";
-    options.ResponseType = "code";
+    options.ClientSecret = "secret";
+    options.ResponseType = OpenIdConnectResponseType.Code;
     options.SaveTokens = true;
     options.RequireHttpsMetadata = false;
+    options.GetClaimsFromUserInfoEndpoint = true;
+
+    // ✅ THIS IS THE KEY FIX — tells OIDC what redirect_uri to send to identity server
+    options.CallbackPath = "/signin-oidc";
+
+    // ✅ Override the redirect URI so identity server gets the correct external URL
+    options.Events.OnRedirectToIdentityProvider = context =>
+    {
+        context.ProtocolMessage.RedirectUri = $"{callbackUrl}/signin-oidc";
+        return Task.CompletedTask;
+    };
+
     options.Scope.Add("openid");
     options.Scope.Add("profile");
+
     options.Events.OnRemoteFailure = context =>
     {
         context.HandleResponse();
@@ -35,13 +52,15 @@ builder.Services.AddAuthorization();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// ✅ Required for Blazor SignalR to work behind proxy/NodePort
+builder.Services.AddSignalR();
+
 builder.AddApplicationServices();
 
 var app = builder.Build();
 
 app.MapDefaultEndpoints();
 
-// ✅ No HTTPS redirection — pod runs HTTP-only inside K8s
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
@@ -50,7 +69,6 @@ if (!app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseAntiforgery();
 
-// ✅ Auth middleware in correct order
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -59,7 +77,7 @@ app.MapRazorComponents<App>()
 
 app.MapForwarder(
     "/product-images/{id}",
-    "http://catalog-service",
+    "http://catalog-api",
     "/api/catalog/items/{id}/pic"
 );
 
