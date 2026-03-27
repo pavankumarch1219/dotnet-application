@@ -1,3 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: basket-service
+  namespace: eshop
+  labels:
+    app: basket-api
+
+spec:
+  type: ClusterIP
+  selector:
+    app: basket-api
+
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,6 +42,23 @@ spec:
           ports:
             - containerPort: 80
 
+          env:
+            - name: ConnectionStrings__BasketDb
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: ConnectionStrings__BasketDb
+
+            # ✅ RabbitMQ (fixed)
+            - name: ConnectionStrings__EventBus
+              value: amqp://guest:guest@rabbitmq:5672
+
+            - name: ASPNETCORE_URLS
+              value: http://+:80
+
+            - name: IdentityUrl
+              value: http://identity-service
+
           resources:
             requests:
               cpu: "100m"
@@ -31,56 +67,26 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
-          # ✅ FIXED: Correct DB + RabbitMQ config
-          env:
-            - name: ConnectionStrings__BasketDb
-              valueFrom:
-                secretKeyRef:
-                  name: app-secret
-                  key:  ConnectionStrings__BasketDb
-
-            - name: RABBITMQ_USER
-              valueFrom:
-                secretKeyRef:
-                  name: rabbitmq-secret
-                  key: RABBITMQ_USER
-
-            - name: RABBITMQ_PASS
-              valueFrom:
-                secretKeyRef:
-                  name: rabbitmq-secret
-                  key: RABBITMQ_PASS
-
-            - name: ConnectionStrings__EventBus
-              value: amqp://$(RABBITMQ_USER):$(RABBITMQ_PASS)@rabbitmq:5672
-
-            - name: ASPNETCORE_URLS
-              value: http://+:80
-
-            - name: ASPNETCORE_Kestrel__EndpointDefaults__Protocols
-              value: Http1AndHttp2
-
-            - name: IdentityUrl
-              value: http://identity-service/identity
-
-            - name: IdentityUrlExternal
-              value: http://20.220.149.85:31306/identity
-
-          # ✅ FIXED: Working health probes
-          livenessProbe:
+          # Startup probe (prevents CrashLoopBackOff)
+          startupProbe:
             httpGet:
               path: /
               port: 80
-            initialDelaySeconds: 60
-            periodSeconds: 15
-            timeoutSeconds: 5
-            failureThreshold: 3
+            failureThreshold: 30
+            periodSeconds: 5
 
+          # Readiness probe
           readinessProbe:
             httpGet:
               path: /
               port: 80
-            initialDelaySeconds: 30
+            initialDelaySeconds: 10
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
+
+          # Liveness probe
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 15
