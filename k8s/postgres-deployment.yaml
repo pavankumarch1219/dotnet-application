@@ -1,3 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: eshop
+  labels:
+    app: postgres
+
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+
+  ports:
+    - name: db
+      port: 5432
+      targetPort: 5432
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,6 +25,7 @@ metadata:
 
 spec:
   replicas: 1
+
   selector:
     matchLabels:
       app: postgres
@@ -40,11 +60,12 @@ spec:
                   key: POSTGRES_PASSWORD
 
           volumeMounts:
-            - mountPath: /var/lib/postgresql/data
-              name: postgres-storage
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
 
-            - mountPath: /docker-entrypoint-initdb.d
-              name: postgres-init
+            # ✅ mount init script (IMPORTANT)
+            - name: postgres-init
+              mountPath: /docker-entrypoint-initdb.d
 
           resources:
             requests:
@@ -54,22 +75,30 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
-          livenessProbe:
-            tcpSocket:
-              port: 5432
+          # ✅ Better startup handling
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            failureThreshold: 30
+            periodSeconds: 5
+
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
             initialDelaySeconds: 20
             periodSeconds: 10
 
-          readinessProbe:
-            tcpSocket:
-              port: 5432
-            initialDelaySeconds: 5
-            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 30
+            periodSeconds: 15
 
       volumes:
         - name: postgres-storage
           emptyDir: {}
 
+        # ✅ attach init configmap
         - name: postgres-init
           configMap:
             name: postgres-init
