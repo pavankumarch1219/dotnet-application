@@ -43,7 +43,9 @@ spec:
         app: dotnet-app
 
     spec:
-      # 🔥 WAIT FOR REDIS (prevents startup crash)
+      # =========================
+      # 🔥 WAIT FOR REDIS
+      # =========================
       initContainers:
         - name: wait-for-redis
           image: busybox
@@ -94,9 +96,9 @@ spec:
               value: redis
 
             # =========================
-            # 🔥 CRITICAL FIX (NO CRASH)
+            # 🔥 CRITICAL FIX (FINAL)
             # =========================
-            - name: CallBackUrl
+            - name: ASPNETCORE_CallBackUrl
               value: http://20.220.149.85:30007
 
           resources:
@@ -108,7 +110,7 @@ spec:
               memory: "512Mi"
 
           # =========================
-          # ✅ STABLE PROBES (NO 404)
+          # ✅ STABLE PROBES
           # =========================
           startupProbe:
             tcpSocket:
