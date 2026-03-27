@@ -1,10 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ordering-service
+  namespace: eshop
+  labels:
+    app: ordering-api
+
+spec:
+  type: ClusterIP
+  selector:
+    app: ordering-api
+
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ordering-api
   namespace: eshop
-  labels:
-    app: ordering-api
 
 spec:
   replicas: 2
@@ -22,53 +39,29 @@ spec:
       containers:
         - name: ordering-api
           image: pavankumarch1219/ordering-api:latest
-          imagePullPolicy: IfNotPresent
 
           ports:
             - containerPort: 80
 
           env:
-            # 🔹 Environment
-            - name: ASPNETCORE_ENVIRONMENT
-              value: "Development"
-
-            # 🔹 Database
             - name: ConnectionStrings__OrderingDb
               valueFrom:
                 secretKeyRef:
                   name: app-secret
                   key: ConnectionStrings__OrderingDb
 
-            # 🔹 RabbitMQ credentials
-            - name: RABBITMQ_USER
-              valueFrom:
-                secretKeyRef:
-                  name: rabbitmq-secret
-                  key: RABBITMQ_USER
-
-            - name: RABBITMQ_PASS
-              valueFrom:
-                secretKeyRef:
-                  name: rabbitmq-secret
-                  key: RABBITMQ_PASS
-
-            # 🔹 RabbitMQ host (ConfigMap recommended)
+            # ✅ RabbitMQ (fixed correctly)
             - name: EventBus__HostName
-              value: "rabbitmq"
+              value: rabbitmq
 
             - name: EventBus__UserName
-              value: "$(RABBITMQ_USER)"
+              value: guest
 
             - name: EventBus__Password
-              value: "$(RABBITMQ_PASS)"
+              value: guest
 
-            # 🔹 ASP.NET binding
             - name: ASPNETCORE_URLS
-              value: "http://+:80"
-
-            # 🔹 FIX: HTTP/1 + HTTP/2 support
-            - name: ASPNETCORE_Kestrel__EndpointDefaults__Protocols
-              value: "Http1AndHttp2"
+              value: http://+:80
 
           resources:
             requests:
@@ -78,17 +71,27 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
+          # ✅ Startup probe (prevents CrashLoopBackOff)
+          startupProbe:
+            httpGet:
+              path: /
+              port: 80
+            failureThreshold: 30
+            periodSeconds: 5
+
+          # ✅ Readiness probe
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          # ✅ Liveness probe (added for stability)
           livenessProbe:
             httpGet:
-              path: /health
+              path: /
               port: 80
             initialDelaySeconds: 30
             periodSeconds: 15
-            failureThreshold: 3
 
-          readinessProbe:
-            httpGet:
-              path: /health/ready
-              port: 80
-            initialDelaySeconds: 20
-            periodSeconds: 10
