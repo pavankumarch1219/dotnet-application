@@ -8,7 +8,6 @@ metadata:
 
 spec:
   type: NodePort
-
   selector:
     app: dotnet-app
 
@@ -37,7 +36,7 @@ spec:
         app: dotnet-app
 
     spec:
-      # 🔥 WAIT FOR REDIS (BEST PRACTICE)
+      # 🔥 WAIT FOR REDIS
       initContainers:
         - name: wait-for-redis
           image: busybox
@@ -63,7 +62,7 @@ spec:
             - name: ASPNETCORE_URLS
               value: http://+:80
 
-            # 🔥 INTERNAL SERVICE URLS
+            # ✅ SERVICE URLs
             - name: IdentityUrl
               value: http://identity-service
 
@@ -76,7 +75,7 @@ spec:
             - name: OrderingUrl
               value: http://ordering-service
 
-            # 🔥 REDIS (NEW)
+            # 🔴 REDIS
             - name: ConnectionStrings__Redis
               value: redis
 
@@ -88,7 +87,7 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
-          # ✅ STABLE PROBES (NO 404 ISSUE)
+          # ✅ SAFE PROBES (NO 404 / NO CRASH)
           startupProbe:
             tcpSocket:
               port: 80
