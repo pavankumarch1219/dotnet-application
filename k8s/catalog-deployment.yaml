@@ -1,10 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog-service
+  namespace: eshop
+  labels:
+    app: catalog-api
+
+spec:
+  type: ClusterIP
+  selector:
+    app: catalog-api
+
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: catalog-api
   namespace: eshop
-  labels:
-    app: catalog-api
 
 spec:
   replicas: 2
@@ -22,42 +39,23 @@ spec:
       containers:
         - name: catalog-api
           image: pavankumarch1219/catalog-api:latest
-          imagePullPolicy: Always
 
           ports:
             - containerPort: 80
 
           env:
-            # ✅ FIXED DB CONNECTION
             - name: ConnectionStrings__CatalogDb
               valueFrom:
                 secretKeyRef:
                   name: app-secret
                   key: ConnectionStrings__CatalogDb
 
-            # ✅ RabbitMQ
-            - name: RABBITMQ_USER
-              valueFrom:
-                secretKeyRef:
-                  name: rabbitmq-secret
-                  key: RABBITMQ_USER
-
-            - name: RABBITMQ_PASS
-              valueFrom:
-                secretKeyRef:
-                  name: rabbitmq-secret
-                  key: RABBITMQ_PASS
-
-            # ✅ EventBus
+            # ✅ RabbitMQ fixed
             - name: ConnectionStrings__EventBus
-              value: amqp://$(RABBITMQ_USER):$(RABBITMQ_PASS)@rabbitmq:5672
+              value: amqp://guest:guest@rabbitmq:5672
 
-            # ✅ ASP.NET
             - name: ASPNETCORE_URLS
               value: http://+:80
-
-            - name: ASPNETCORE_Kestrel__EndpointDefaults__Protocols
-              value: Http1AndHttp2
 
           resources:
             requests:
@@ -66,3 +64,28 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+
+          # ✅ Startup probe (prevents CrashLoopBackOff)
+          startupProbe:
+            httpGet:
+              path: /
+              port: 80
+            failureThreshold: 30
+            periodSeconds: 5
+
+          # ✅ Readiness probe
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          # ✅ Liveness probe (added for stability)
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 15
+
