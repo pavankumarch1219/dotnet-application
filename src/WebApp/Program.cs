@@ -1,5 +1,6 @@
 using eShop.WebApp.Components;
 using eShop.ServiceDefaults;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 
@@ -7,7 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-// 🔐 AUTH CONFIG
+// 🔐 AUTH
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
@@ -16,7 +17,7 @@ builder.Services.AddAuthentication(options =>
 .AddCookie()
 .AddOpenIdConnect("oidc", options =>
 {
-    options.Authority = "http://20.220.149.85/identity"; // 🔥 replace with your VM IP
+    options.Authority = "http://identity-service"; // internal service
 
     options.ClientId = "webapp";
     options.ResponseType = "code";
@@ -26,9 +27,6 @@ builder.Services.AddAuthentication(options =>
 
     options.Scope.Add("openid");
     options.Scope.Add("profile");
-
-    // 🔥 IMPORTANT (avoid redirect issues)
-    options.CallbackPath = "/signin-oidc";
 });
 
 builder.Services.AddAuthorization();
@@ -42,7 +40,6 @@ var app = builder.Build();
 
 app.MapDefaultEndpoints();
 
-// ---------------- PIPELINE ----------------
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
@@ -51,30 +48,16 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
-
 app.UseAntiforgery();
 
+// 🔐 AUTH MIDDLEWARE
 app.UseAuthentication();
 app.UseAuthorization();
 
-// 🔥 SAFE LOGIN REDIRECT (NO LOOP)
+// 🔥 SAFE LOGIN MIDDLEWARE (FIXED NULL + ERROR)
 app.Use(async (context, next) =>
 {
-    var path = context.Request.Path.Value;
-
-    // allow these paths without auth
-    if (path.StartsWith("/signin-oidc") ||
-        path.StartsWith("/identity") ||
-        path.StartsWith("/_framework") ||
-        path.StartsWith("/css") ||
-        path.StartsWith("/js") ||
-        path.StartsWith("/images"))
-    {
-        await next();
-        return;
-    }
-
-    if (!context.User.Identity?.IsAuthenticated ?? true)
+    if (context.User?.Identity == null || !context.User.Identity.IsAuthenticated)
     {
         await context.ChallengeAsync("oidc");
         return;
@@ -87,10 +70,10 @@ app.Use(async (context, next) =>
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
-// API forwarder
+// API Forwarder
 app.MapForwarder(
     "/product-images/{id}",
-    "https+http://catalog-api",
+    "http://catalog-service",
     "/api/catalog/items/{id}/pic"
 );
 
