@@ -1,65 +1,68 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: dotnet-app
+  name: basket-service
   namespace: eshop
   labels:
-    app: dotnet-app
+    app: basket-api
 
 spec:
-  type: NodePort
+  type: ClusterIP
 
   selector:
-    app: dotnet-app
+    app: basket-api
 
   ports:
-    - port: 80
+    - name: grpc
+      port: 80
       targetPort: 80
-      nodePort: 30007
 
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: dotnet-app
+  name: basket-api
   namespace: eshop
 
 spec:
-  replicas: 1
+  replicas: 2
 
   selector:
     matchLabels:
-      app: dotnet-app
+      app: basket-api
 
   template:
     metadata:
       labels:
-        app: dotnet-app
+        app: basket-api
 
     spec:
       containers:
-        - name: dotnet-app
-          image: pavankumarch1219/dotnet-application:latest
+        - name: basket-api
+          image: pavankumarch1219/basket-api:latest
 
           ports:
             - containerPort: 80
 
           env:
+            # 🔥 DATABASE / REDIS
+            - name: ConnectionStrings__Redis
+              value: redis
+
+            # 🔥 RABBITMQ
+            - name: ConnectionStrings__EventBus
+              value: amqp://guest:guest@rabbitmq:5672
+
+            # 🔥 FORCE HTTP/2 (VERY IMPORTANT)
             - name: ASPNETCORE_URLS
               value: http://+:80
 
-            # 🔥 INTERNAL SERVICE URLS
-            - name: IdentityUrl
-              value: http://identity-service
+            - name: ASPNETCORE_Kestrel__EndpointDefaults__Protocols
+              value: Http2
 
-            - name: CatalogUrl
-              value: http://catalog-service
-
-            - name: BasketUrl
-              value: http://basket-service
-
-            - name: OrderingUrl
-              value: http://ordering-service
+            # 🔥 IDENTITY
+            - name: Identity__Audience
+              value: basket
 
           resources:
             requests:
@@ -69,7 +72,7 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
-          # ✅ FIXED PROBES (NO 404 ISSUE)
+          # ✅ FIXED (gRPC safe)
           startupProbe:
             tcpSocket:
               port: 80
