@@ -20,36 +20,15 @@ variables:
 stages:
 
 # =========================
-# 🏗 BUILD STAGE
-# =========================
-- stage: Build
-  displayName: Build .NET Apps
-  jobs:
-  - job: BuildJob
-    steps:
-
-    - task: UseDotNet@2
-      inputs:
-        packageType: sdk
-        version: 8.0.x
-
-    - script: |
-        dotnet restore
-        dotnet build --configuration Release --no-restore
-      displayName: Build Solution
-
-
-# =========================
-# 🐳 DOCKER STAGE
+# 🐳 DOCKER BUILD & PUSH
 # =========================
 - stage: Docker
-  displayName: Build & Push Docker Images
-  dependsOn: Build
+  displayName: Build & Push Images
   jobs:
   - job: DockerJob
     steps:
 
-    # Docker Login
+    # Login to DockerHub
     - script: |
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
       displayName: Docker Login
@@ -57,30 +36,35 @@ stages:
         DOCKER_USERNAME: $(DOCKER_USERNAME)
         DOCKER_PASSWORD: $(DOCKER_PASSWORD)
 
-    # Build & Push Images
+    # Build & Push only required services
     - script: |
         set -e
 
+        echo "Building Catalog API..."
         docker build -t $(dockerRepo)/catalog-api:latest -f src/Catalog.API/Dockerfile .
         docker push $(dockerRepo)/catalog-api:latest
 
+        echo "Building Basket API..."
         docker build -t $(dockerRepo)/basket-api:latest -f src/Basket.API/Dockerfile .
         docker push $(dockerRepo)/basket-api:latest
 
+        echo "Building Identity API..."
         docker build -t $(dockerRepo)/identity-api:latest -f src/Identity.API/Dockerfile .
         docker push $(dockerRepo)/identity-api:latest
 
+        echo "Building Ordering API..."
         docker build -t $(dockerRepo)/ordering-api:latest -f src/Ordering.API/Dockerfile .
         docker push $(dockerRepo)/ordering-api:latest
 
+        echo "Building Web App..."
         docker build -t $(dockerRepo)/dotnet-application:latest -f src/WebApp/Dockerfile .
         docker push $(dockerRepo)/dotnet-application:latest
 
-      displayName: Build & Push Images
+      displayName: Build & Push Docker Images
 
 
 # =========================
-# 🚀 DEPLOY STAGE
+# 🚀 DEPLOY TO K8s
 # =========================
 - stage: Deploy
   displayName: Deploy to Kubernetes
@@ -146,7 +130,7 @@ stages:
     # VERIFY
     # =========================
     - script: |
-        echo "Checking deployment status..."
+        echo "Deployment Status:"
         kubectl get pods -n $(namespace)
         kubectl get svc -n $(namespace)
         kubectl get ingress -n $(namespace)
