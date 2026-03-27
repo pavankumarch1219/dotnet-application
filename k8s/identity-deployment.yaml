@@ -1,10 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: identity-service
+  namespace: eshop
+  labels:
+    app: identity-api
+
+spec:
+  type: ClusterIP
+  selector:
+    app: identity-api
+
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: identity-api
   namespace: eshop
-  labels:
-    app: identity-api
 
 spec:
   replicas: 2
@@ -21,30 +38,20 @@ spec:
     spec:
       containers:
         - name: identity-api
-          image: pavankumarch1219/identity-api:latest   # ✅ avoid latest
-          imagePullPolicy: IfNotPresent
+          image: pavankumarch1219/identity-api:latest
 
           ports:
             - containerPort: 80
 
           env:
-            # 🔹 Database (from secret)
             - name: ConnectionStrings__IdentityDb
               valueFrom:
                 secretKeyRef:
                   name: app-secret
                   key: ConnectionStrings__IdentityDb
 
-            # 🔹 ASP.NET Core settings
             - name: ASPNETCORE_URLS
-              value: "http://+:80"
-
-            - name: ASPNETCORE_ENVIRONMENT
-              value: "Development"
-
-            # 🔹 Fix HTTP/2 issue
-            - name: ASPNETCORE_Kestrel__EndpointDefaults__Protocols
-              value: "Http1AndHttp2"
+              value: http://+:80
 
           resources:
             requests:
@@ -54,18 +61,26 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
+          # ✅ Startup probe (prevents CrashLoopBackOff)
+          startupProbe:
+            httpGet:
+              path: /
+              port: 80
+            failureThreshold: 30
+            periodSeconds: 5
+
+          # ✅ Readiness probe (added)
           readinessProbe:
             httpGet:
-              path: /health
+              path: /
               port: 80
-            initialDelaySeconds: 15
+            initialDelaySeconds: 10
             periodSeconds: 10
-            failureThreshold: 3
 
+          # ✅ Liveness probe (added)
           livenessProbe:
             httpGet:
-              path: /health
+              path: /
               port: 80
-            initialDelaySeconds: 25
+            initialDelaySeconds: 30
             periodSeconds: 15
-            failureThreshold: 3
