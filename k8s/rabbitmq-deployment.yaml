@@ -1,8 +1,32 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: eshop
+  labels:
+    app: rabbitmq
+
+spec:
+  type: ClusterIP
+  selector:
+    app: rabbitmq
+
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: 5672
+
+    - name: management
+      port: 15672
+      targetPort: 15672
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: rabbitmq
   namespace: eshop
+
 spec:
   replicas: 1
 
@@ -22,33 +46,42 @@ spec:
 
           ports:
             - containerPort: 5672
-              name: amqp
             - containerPort: 15672
-              name: management
 
           env:
+            # ✅ MUST match your apps
             - name: RABBITMQ_DEFAULT_USER
-              value: "admin"
-            - name: RABBITMQ_DEFAULT_PASS
-              value: "StrongPassword123!"
+              value: guest
 
-          # ✅ Better readiness probe
+            - name: RABBITMQ_DEFAULT_PASS
+              value: guest
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          # ✅ Startup probe (prevents early failure)
+          startupProbe:
+            tcpSocket:
+              port: 5672
+            failureThreshold: 30
+            periodSeconds: 5
+
           readinessProbe:
             tcpSocket:
               port: 5672
             initialDelaySeconds: 20
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 5
 
-          # ✅ Better liveness probe
           livenessProbe:
             tcpSocket:
               port: 5672
             initialDelaySeconds: 40
             periodSeconds: 20
-            timeoutSeconds: 5
-            failureThreshold: 5
 
           volumeMounts:
             - name: rabbitmq-data
