@@ -11,8 +11,14 @@ metadata:
 spec:
   ingressClassName: nginx
 
+  tls:
+  - hosts:
+    - eshop.local
+    secretName: eshop-tls
+
   rules:
-    - http:
+    - host: eshop.local   # ✅ IMPORTANT
+      http:
         paths:
 
           # 🌐 Web App
