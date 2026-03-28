@@ -16,14 +16,53 @@ variables:
 - name: imageTag
   value: latest
 
-
 stages:
 
 # =========================
-# 🐳 DOCKER BUILD & PUSH
+#  SONARQUBE ANALYSIS
+# =========================
+- stage: SonarQube
+  displayName: Code Quality Check
+  jobs:
+  - job: SonarJob
+    steps:
+
+    # Prepare SonarQube
+    - task: SonarQubePrepare@5
+      inputs:
+        SonarQube: 'sonar-sc'   
+        scannerMode: 'MSBuild'
+        projectKey: 'eshop-project'
+        projectName: 'eshop-project'
+
+    # Restore dependencies
+    - script: dotnet restore
+      displayName: Restore
+
+    # Build solution
+    - script: dotnet build --no-restore
+      displayName: Build
+
+    # (Optional but recommended)
+    - script: dotnet test --no-build
+      displayName: Run Tests
+
+    # Run analysis
+    - task: SonarQubeAnalyze@5
+
+    # Publish Quality Gate result
+    - task: SonarQubePublish@5
+      inputs:
+        pollingTimeoutSec: '300'
+
+
+# =========================
+#  DOCKER BUILD & PUSH
 # =========================
 - stage: Docker
   displayName: Build & Push Images
+  dependsOn: SonarQube
+  condition: succeeded()   #  only if Sonar passes
   jobs:
   - job: DockerJob
     steps:
@@ -57,7 +96,7 @@ stages:
 
 
 # =========================
-# 🚀 DEPLOY TO K8s
+#  DEPLOY TO K8s
 # =========================
 - stage: Deploy
   displayName: Deploy to Kubernetes
@@ -80,7 +119,7 @@ stages:
     - script: kubectl apply -f k8s/secret.yaml -n $(namespace)
 
     # =========================
-    # 🐘 POSTGRES
+    #  POSTGRES
     # =========================
     - script: kubectl apply -f k8s/postgres-deployment.yaml -n $(namespace)
 
@@ -89,7 +128,7 @@ stages:
         kubectl rollout status deployment/postgres -n $(namespace) --timeout=300s
 
     # =========================
-    # 🐰 RABBITMQ
+    #  RABBITMQ
     # =========================
     - script: kubectl apply -f k8s/rabbitmq-deployment.yaml -n $(namespace)
 
@@ -98,7 +137,7 @@ stages:
         kubectl rollout status deployment/rabbitmq -n $(namespace) --timeout=300s
 
     # =========================
-    # 🔴 REDIS (NEW - IMPORTANT)
+    #  REDIS
     # =========================
     - script: kubectl apply -f k8s/redis-deployment.yaml -n $(namespace)
 
@@ -107,7 +146,7 @@ stages:
         kubectl rollout status deployment/redis -n $(namespace) --timeout=120s
 
     # =========================
-    # 🧩 MICROSERVICES
+    #  MICROSERVICES
     # =========================
     - script: kubectl apply -f k8s/catalog-deployment.yaml -n $(namespace)
     - script: kubectl apply -f k8s/basket-deployment.yaml -n $(namespace)
@@ -115,17 +154,17 @@ stages:
     - script: kubectl apply -f k8s/ordering-deployment.yaml -n $(namespace)
 
     # =========================
-    # 🌐 WEB APP
+    #  WEB APP
     # =========================
     - script: kubectl apply -f k8s/dotnet-deployment.yaml -n $(namespace)
 
     # =========================
-    # 🌍 INGRESS
+    #  INGRESS
     # =========================
     - script: kubectl apply -f k8s/ingress.yaml -n $(namespace)
 
     # =========================
-    # 📊 VERIFY
+    #  VERIFY
     # =========================
     - script: |
         echo "===== PODS ====="
