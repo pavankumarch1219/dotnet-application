@@ -70,13 +70,13 @@ spec:
             # 🔗 INTERNAL SERVICES
             # =========================
             - name: IdentityUrl
-              value: "http://identity-api:80"
+              value: "http://identity-api"
             - name: CatalogUrl
-              value: "http://catalog-api:80"
+              value: "http://catalog-api"
             - name: BasketUrl
-              value: "http://basket-api:80"
+              value: "http://basket-api"
             - name: OrderingUrl
-              value: "http://ordering-api:80"
+              value: "http://ordering-api"
 
             # =========================
             # 🔴 REDIS
