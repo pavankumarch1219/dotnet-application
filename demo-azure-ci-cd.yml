@@ -29,7 +29,7 @@ stages:
     steps:
 
     # Prepare SonarQube (FIXED)
-    - task: SonarQubePrepare@9
+    - task: SonarQubePrepare@7
       inputs:
         SonarQube: 'sonar-sc'
         scannerMode: 'dotnet'
@@ -49,10 +49,10 @@ stages:
       displayName: Run Tests
 
     # Run analysis
-    - task: SonarQubeAnalyze@9
+    - task: SonarQubeAnalyze@7
 
     # Publish Quality Gate
-    - task: SonarQubePublish@9
+    - task: SonarQubePublish@7
       inputs:
         pollingTimeoutSec: '300'
 
