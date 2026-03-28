@@ -16,6 +16,7 @@ variables:
 - name: imageTag
   value: latest
 
+
 stages:
 
 # =========================
@@ -27,11 +28,11 @@ stages:
   - job: SonarJob
     steps:
 
-    # Prepare SonarQube
-    - task: SonarQubePrepare@7
+    # Prepare SonarQube (FIXED)
+    - task: SonarQubePrepare@9
       inputs:
-        SonarQube: 'sonar-sc'   
-        scannerMode: 'MSBuild'
+        SonarQube: 'sonar-sc'
+        scannerMode: 'dotnet'
         projectKey: 'eshop-project'
         projectName: 'eshop-project'
 
@@ -43,15 +44,15 @@ stages:
     - script: dotnet build --no-restore
       displayName: Build
 
-    # (Optional but recommended)
-    - script: dotnet test --no-build
+    # Run tests + coverage (optional but recommended)
+    - script: dotnet test --no-build --collect:"XPlat Code Coverage"
       displayName: Run Tests
 
     # Run analysis
-    - task: SonarQubeAnalyze@7
+    - task: SonarQubeAnalyze@9
 
-    # Publish Quality Gate result
-    - task: SonarQubePublish@7
+    # Publish Quality Gate
+    - task: SonarQubePublish@9
       inputs:
         pollingTimeoutSec: '300'
 
@@ -62,11 +63,12 @@ stages:
 - stage: Docker
   displayName: Build & Push Images
   dependsOn: SonarQube
-  condition: succeeded()   #  only if Sonar passes
+  condition: succeeded()
   jobs:
   - job: DockerJob
     steps:
 
+    # Docker Login
     - script: |
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
       displayName: Docker Login
@@ -74,23 +76,24 @@ stages:
         DOCKER_USERNAME: $(DOCKER_USERNAME)
         DOCKER_PASSWORD: $(DOCKER_PASSWORD)
 
+    # Build & Push Images
     - script: |
         set -e
 
-        docker build -t $(dockerRepo)/catalog-api:latest -f src/Catalog.API/Dockerfile .
-        docker push $(dockerRepo)/catalog-api:latest
+        docker build -t $(dockerRepo)/catalog-api:$(imageTag) -f src/Catalog.API/Dockerfile .
+        docker push $(dockerRepo)/catalog-api:$(imageTag)
 
-        docker build -t $(dockerRepo)/basket-api:latest -f src/Basket.API/Dockerfile .
-        docker push $(dockerRepo)/basket-api:latest
+        docker build -t $(dockerRepo)/basket-api:$(imageTag) -f src/Basket.API/Dockerfile .
+        docker push $(dockerRepo)/basket-api:$(imageTag)
 
-        docker build -t $(dockerRepo)/identity-api:latest -f src/Identity.API/Dockerfile .
-        docker push $(dockerRepo)/identity-api:latest
+        docker build -t $(dockerRepo)/identity-api:$(imageTag) -f src/Identity.API/Dockerfile .
+        docker push $(dockerRepo)/identity-api:$(imageTag)
 
-        docker build -t $(dockerRepo)/ordering-api:latest -f src/Ordering.API/Dockerfile .
-        docker push $(dockerRepo)/ordering-api:latest
+        docker build -t $(dockerRepo)/ordering-api:$(imageTag) -f src/Ordering.API/Dockerfile .
+        docker push $(dockerRepo)/ordering-api:$(imageTag)
 
-        docker build -t $(dockerRepo)/dotnet-application:latest -f src/WebApp/Dockerfile .
-        docker push $(dockerRepo)/dotnet-application:latest
+        docker build -t $(dockerRepo)/dotnet-application:$(imageTag) -f src/WebApp/Dockerfile .
+        docker push $(dockerRepo)/dotnet-application:$(imageTag)
 
       displayName: Build & Push Docker Images
 
@@ -101,70 +104,89 @@ stages:
 - stage: Deploy
   displayName: Deploy to Kubernetes
   dependsOn: Docker
+  condition: succeeded()
   jobs:
   - job: DeployJob
     steps:
 
     - script: kubectl version --client
+      displayName: Check kubectl
 
     # =========================
     # NAMESPACE
     # =========================
     - script: |
         kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
+      displayName: Create Namespace
 
     # =========================
     # SECRETS
     # =========================
     - script: kubectl apply -f k8s/secret.yaml -n $(namespace)
+      displayName: Apply Secrets
 
     # =========================
-    #  POSTGRES
+    # POSTGRES
     # =========================
     - script: kubectl apply -f k8s/postgres-deployment.yaml -n $(namespace)
+      displayName: Deploy Postgres
 
     - script: |
         echo "Waiting for Postgres..."
         kubectl rollout status deployment/postgres -n $(namespace) --timeout=300s
+      displayName: Wait for Postgres
 
     # =========================
-    #  RABBITMQ
+    # RABBITMQ
     # =========================
     - script: kubectl apply -f k8s/rabbitmq-deployment.yaml -n $(namespace)
+      displayName: Deploy RabbitMQ
 
     - script: |
         echo "Waiting for RabbitMQ..."
         kubectl rollout status deployment/rabbitmq -n $(namespace) --timeout=300s
+      displayName: Wait for RabbitMQ
 
     # =========================
-    #  REDIS
+    # REDIS
     # =========================
     - script: kubectl apply -f k8s/redis-deployment.yaml -n $(namespace)
+      displayName: Deploy Redis
 
     - script: |
         echo "Waiting for Redis..."
         kubectl rollout status deployment/redis -n $(namespace) --timeout=120s
+      displayName: Wait for Redis
 
     # =========================
-    #  MICROSERVICES
+    # MICROSERVICES
     # =========================
     - script: kubectl apply -f k8s/catalog-deployment.yaml -n $(namespace)
+      displayName: Deploy Catalog API
+
     - script: kubectl apply -f k8s/basket-deployment.yaml -n $(namespace)
+      displayName: Deploy Basket API
+
     - script: kubectl apply -f k8s/identity-deployment.yaml -n $(namespace)
+      displayName: Deploy Identity API
+
     - script: kubectl apply -f k8s/ordering-deployment.yaml -n $(namespace)
+      displayName: Deploy Ordering API
 
     # =========================
-    #  WEB APP
+    # WEB APP
     # =========================
     - script: kubectl apply -f k8s/dotnet-deployment.yaml -n $(namespace)
+      displayName: Deploy WebApp
 
     # =========================
-    #  INGRESS
+    # INGRESS
     # =========================
     - script: kubectl apply -f k8s/ingress.yaml -n $(namespace)
+      displayName: Apply Ingress
 
     # =========================
-    #  VERIFY
+    # VERIFY
     # =========================
     - script: |
         echo "===== PODS ====="
@@ -175,3 +197,4 @@ stages:
 
         echo "===== INGRESS ====="
         kubectl get ingress -n $(namespace)
+      displayName: Verify Deployment
