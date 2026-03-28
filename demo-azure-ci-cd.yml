@@ -28,7 +28,7 @@ stages:
     steps:
 
     # Prepare SonarQube
-    - task: SonarQubePrepare@5
+    - task: SonarQubePrepare@7
       inputs:
         SonarQube: 'sonar-sc'   
         scannerMode: 'MSBuild'
@@ -48,10 +48,10 @@ stages:
       displayName: Run Tests
 
     # Run analysis
-    - task: SonarQubeAnalyze@5
+    - task: SonarQubeAnalyze@7
 
     # Publish Quality Gate result
-    - task: SonarQubePublish@5
+    - task: SonarQubePublish@7
       inputs:
         pollingTimeoutSec: '300'
 
