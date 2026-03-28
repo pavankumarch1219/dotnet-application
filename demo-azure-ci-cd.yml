@@ -20,7 +20,7 @@ variables:
 stages:
 
 # =========================
-#  SONARQUBE ANALYSIS
+#  SONARQUBE ANALYSIS (v7)
 # =========================
 - stage: SonarQube
   displayName: Code Quality Check
@@ -28,7 +28,14 @@ stages:
   - job: SonarJob
     steps:
 
-    # Prepare SonarQube (FIXED)
+    # 🔥 MUST INSTALL .NET
+    - task: UseDotNet@2
+      displayName: Install .NET SDK
+      inputs:
+        packageType: 'sdk'
+        version: '8.0.x'
+
+    # 🔥 FIXED
     - task: SonarQubePrepare@7
       inputs:
         SonarQube: 'sonar-sc'
@@ -36,22 +43,17 @@ stages:
         projectKey: 'eshop-project'
         projectName: 'eshop-project'
 
-    # Restore dependencies
     - script: dotnet restore
       displayName: Restore
 
-    # Build solution
     - script: dotnet build --no-restore
       displayName: Build
 
-    # Run tests + coverage (optional but recommended)
-    - script: dotnet test --no-build --collect:"XPlat Code Coverage"
+    - script: dotnet test --no-build
       displayName: Run Tests
 
-    # Run analysis
     - task: SonarQubeAnalyze@7
 
-    # Publish Quality Gate
     - task: SonarQubePublish@7
       inputs:
         pollingTimeoutSec: '300'
@@ -68,7 +70,12 @@ stages:
   - job: DockerJob
     steps:
 
-    # Docker Login
+    # optional but safe
+    - task: UseDotNet@2
+      inputs:
+        packageType: 'sdk'
+        version: '8.0.x'
+
     - script: |
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
       displayName: Docker Login
@@ -76,7 +83,6 @@ stages:
         DOCKER_USERNAME: $(DOCKER_USERNAME)
         DOCKER_PASSWORD: $(DOCKER_PASSWORD)
 
-    # Build & Push Images
     - script: |
         set -e
 
@@ -110,91 +116,31 @@ stages:
     steps:
 
     - script: kubectl version --client
-      displayName: Check kubectl
 
-    # =========================
-    # NAMESPACE
-    # =========================
     - script: |
         kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
-      displayName: Create Namespace
 
-    # =========================
-    # SECRETS
-    # =========================
     - script: kubectl apply -f k8s/secret.yaml -n $(namespace)
-      displayName: Apply Secrets
 
-    # =========================
-    # POSTGRES
-    # =========================
     - script: kubectl apply -f k8s/postgres-deployment.yaml -n $(namespace)
-      displayName: Deploy Postgres
+    - script: kubectl rollout status deployment/postgres -n $(namespace) --timeout=300s
 
-    - script: |
-        echo "Waiting for Postgres..."
-        kubectl rollout status deployment/postgres -n $(namespace) --timeout=300s
-      displayName: Wait for Postgres
-
-    # =========================
-    # RABBITMQ
-    # =========================
     - script: kubectl apply -f k8s/rabbitmq-deployment.yaml -n $(namespace)
-      displayName: Deploy RabbitMQ
+    - script: kubectl rollout status deployment/rabbitmq -n $(namespace) --timeout=300s
 
-    - script: |
-        echo "Waiting for RabbitMQ..."
-        kubectl rollout status deployment/rabbitmq -n $(namespace) --timeout=300s
-      displayName: Wait for RabbitMQ
-
-    # =========================
-    # REDIS
-    # =========================
     - script: kubectl apply -f k8s/redis-deployment.yaml -n $(namespace)
-      displayName: Deploy Redis
+    - script: kubectl rollout status deployment/redis -n $(namespace) --timeout=120s
 
-    - script: |
-        echo "Waiting for Redis..."
-        kubectl rollout status deployment/redis -n $(namespace) --timeout=120s
-      displayName: Wait for Redis
-
-    # =========================
-    # MICROSERVICES
-    # =========================
     - script: kubectl apply -f k8s/catalog-deployment.yaml -n $(namespace)
-      displayName: Deploy Catalog API
-
     - script: kubectl apply -f k8s/basket-deployment.yaml -n $(namespace)
-      displayName: Deploy Basket API
-
     - script: kubectl apply -f k8s/identity-deployment.yaml -n $(namespace)
-      displayName: Deploy Identity API
-
     - script: kubectl apply -f k8s/ordering-deployment.yaml -n $(namespace)
-      displayName: Deploy Ordering API
 
-    # =========================
-    # WEB APP
-    # =========================
     - script: kubectl apply -f k8s/dotnet-deployment.yaml -n $(namespace)
-      displayName: Deploy WebApp
 
-    # =========================
-    # INGRESS
-    # =========================
     - script: kubectl apply -f k8s/ingress.yaml -n $(namespace)
-      displayName: Apply Ingress
 
-    # =========================
-    # VERIFY
-    # =========================
     - script: |
-        echo "===== PODS ====="
         kubectl get pods -n $(namespace)
-
-        echo "===== SERVICES ====="
         kubectl get svc -n $(namespace)
-
-        echo "===== INGRESS ====="
         kubectl get ingress -n $(namespace)
-      displayName: Verify Deployment
