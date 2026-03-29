@@ -29,7 +29,7 @@ stages:
 
           - task: SonarQubePrepare@7
             inputs:
-              SonarQube: sonar-local
+              SonarQube: sonar-sc
               scannerMode: CLI
               configMode: manual
               cliProjectKey: eshop-app
