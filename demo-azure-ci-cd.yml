@@ -1,23 +1,16 @@
 trigger:
 - main
-
 pool:
   name: eshop-agent
-
 variables:
 - group: docker-credentials
-
 - name: namespace
   value: eshop
-
 - name: dockerRepo
   value: pavankumarch1219
-
 - name: imageTag
   value: latest
-
 stages:
-
 # =========================
 # 🔍 SONARQUBE ANALYSIS
 # =========================
@@ -26,9 +19,7 @@ stages:
   jobs:
   - job: SonarJob
     steps:
-
     - checkout: self
-
     - task: SonarQubePrepare@7
       inputs:
         SonarQube: 'sonar-sc'
@@ -37,16 +28,12 @@ stages:
         cliProjectKey: 'e-shop'
         cliProjectName: 'e-shop'
         cliSources: '.'
-        extraProperties: |
-          sonar.branch.name=
-
+        # ❌ Removed extraProperties with sonar.branch.name
+        # Branch analysis requires SonarQube Developer Edition or above
     - task: SonarQubeAnalyze@7
-
     - task: SonarQubePublish@7
       inputs:
         pollingTimeoutSec: '300'
-
-
 # =========================
 # 🐳 DOCKER BUILD & PUSH
 # =========================
@@ -57,37 +44,26 @@ stages:
   jobs:
   - job: DockerJob
     steps:
-
     - checkout: self
-
     - script: |
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
       displayName: Docker Login
       env:
         DOCKER_USERNAME: $(DOCKER_USERNAME)
         DOCKER_PASSWORD: $(DOCKER_PASSWORD)
-
     - script: |
         set -e
-
         docker build -t $(dockerRepo)/catalog-api:latest -f src/Catalog.API/Dockerfile .
         docker push $(dockerRepo)/catalog-api:latest
-
         docker build -t $(dockerRepo)/basket-api:latest -f src/Basket.API/Dockerfile .
         docker push $(dockerRepo)/basket-api:latest
-
         docker build -t $(dockerRepo)/identity-api:latest -f src/Identity.API/Dockerfile .
         docker push $(dockerRepo)/identity-api:latest
-
         docker build -t $(dockerRepo)/ordering-api:latest -f src/Ordering.API/Dockerfile .
         docker push $(dockerRepo)/ordering-api:latest
-
         docker build -t $(dockerRepo)/dotnet-application:latest -f src/WebApp/Dockerfile .
         docker push $(dockerRepo)/dotnet-application:latest
-
       displayName: Build & Push Docker Images
-
-
 # =========================
 # 🚀 DEPLOY TO K8s
 # =========================
@@ -97,55 +73,42 @@ stages:
   jobs:
   - job: DeployJob
     steps:
-
     - checkout: self
-
     - script: kubectl version --client
-
     # Namespace
     - script: |
         kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
-
     # Secrets
     - script: kubectl apply -f k8s/secret.yaml -n $(namespace)
-
     # Postgres
     - script: kubectl apply -f k8s/postgres-deployment.yaml -n $(namespace)
     - script: |
         echo "Waiting for Postgres..."
         kubectl rollout status deployment/postgres -n $(namespace) --timeout=300s
-
     # RabbitMQ
     - script: kubectl apply -f k8s/rabbitmq-deployment.yaml -n $(namespace)
     - script: |
         echo "Waiting for RabbitMQ..."
         kubectl rollout status deployment/rabbitmq -n $(namespace) --timeout=300s
-
     # Redis
     - script: kubectl apply -f k8s/redis-deployment.yaml -n $(namespace)
     - script: |
         echo "Waiting for Redis..."
         kubectl rollout status deployment/redis -n $(namespace) --timeout=120s
-
     # Microservices
     - script: kubectl apply -f k8s/catalog-deployment.yaml -n $(namespace)
     - script: kubectl apply -f k8s/basket-deployment.yaml -n $(namespace)
     - script: kubectl apply -f k8s/identity-deployment.yaml -n $(namespace)
     - script: kubectl apply -f k8s/ordering-deployment.yaml -n $(namespace)
-
     # Web App
     - script: kubectl apply -f k8s/dotnet-deployment.yaml -n $(namespace)
-
     # Ingress
     - script: kubectl apply -f k8s/ingress.yaml -n $(namespace)
-
     # Verify
     - script: |
         echo "===== PODS ====="
         kubectl get pods -n $(namespace)
-
         echo "===== SERVICES ====="
         kubectl get svc -n $(namespace)
-
         echo "===== INGRESS ====="
         kubectl get ingress -n $(namespace)
