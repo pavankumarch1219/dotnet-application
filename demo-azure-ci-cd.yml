@@ -27,19 +27,14 @@ stages:
         steps:
           - checkout: self
 
-          - task: SonarQubeToolInstaller@1
-
           - task: SonarQubePrepare@7
             inputs:
               SonarQube: sonar-local
               scannerMode: CLI
               configMode: manual
-              cliProjectKey: eshop-project
-              cliProjectName: eshop-project
+              cliProjectKey: eshop-app
+              cliProjectName: eshop-app
               cliSources: .
-
-          - script: dotnet build
-            displayName: Build Project
 
           - task: SonarQubeAnalyze@7
 
@@ -98,65 +93,44 @@ stages:
 
           - script: kubectl version --client
 
-          # =========================
-          # NAMESPACE
-          # =========================
+          # Namespace
           - script: |
               kubectl get namespace $(namespace) || kubectl create namespace $(namespace)
 
-          # =========================
-          # SECRETS
-          # =========================
+          # Secrets
           - script: kubectl apply -f k8s/secret.yaml -n $(namespace)
 
-          # =========================
-          # 🐘 POSTGRES
-          # =========================
+          # Postgres
           - script: kubectl apply -f k8s/postgres-deployment.yaml -n $(namespace)
-
           - script: |
               echo "Waiting for Postgres..."
               kubectl rollout status deployment/postgres -n $(namespace) --timeout=300s
 
-          # =========================
-          # 🐰 RABBITMQ
-          # =========================
+          # RabbitMQ
           - script: kubectl apply -f k8s/rabbitmq-deployment.yaml -n $(namespace)
-
           - script: |
               echo "Waiting for RabbitMQ..."
               kubectl rollout status deployment/rabbitmq -n $(namespace) --timeout=300s
 
-          # =========================
-          # 🔴 REDIS
-          # =========================
+          # Redis
           - script: kubectl apply -f k8s/redis-deployment.yaml -n $(namespace)
-
           - script: |
               echo "Waiting for Redis..."
               kubectl rollout status deployment/redis -n $(namespace) --timeout=120s
 
-          # =========================
-          # 🧩 MICROSERVICES
-          # =========================
+          # Microservices
           - script: kubectl apply -f k8s/catalog-deployment.yaml -n $(namespace)
           - script: kubectl apply -f k8s/basket-deployment.yaml -n $(namespace)
           - script: kubectl apply -f k8s/identity-deployment.yaml -n $(namespace)
           - script: kubectl apply -f k8s/ordering-deployment.yaml -n $(namespace)
 
-          # =========================
-          # 🌐 WEB APP
-          # =========================
+          # Web App
           - script: kubectl apply -f k8s/dotnet-deployment.yaml -n $(namespace)
 
-          # =========================
-          # 🌍 INGRESS
-          # =========================
+          # Ingress
           - script: kubectl apply -f k8s/ingress.yaml -n $(namespace)
 
-          # =========================
-          # 📊 VERIFY
-          # =========================
+          # Verify
           - script: |
               echo "===== PODS ====="
               kubectl get pods -n $(namespace)
