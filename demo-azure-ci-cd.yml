@@ -28,11 +28,10 @@ stages:
         cliProjectKey: 'e-shop'
         cliProjectName: 'e-shop'
         cliSources: '.'
-        # ❌ Removed extraProperties with sonar.branch.name
-        # Branch analysis requires SonarQube Developer Edition or above
-    - task: SonarQubeAnalyze@7
-    - task: SonarQubePublish@7
-      inputs:
+     - task: SonarQubeAnalyze@7
+
+      - task: SonarQubePublish@7
+        inputs:
         pollingTimeoutSec: '300'
 # =========================
 # 🐳 DOCKER BUILD & PUSH
