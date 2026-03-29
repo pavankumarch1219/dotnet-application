@@ -25,18 +25,24 @@ stages:
     - checkout: self
     - task: SonarQubePrepare@7
       inputs:
-        SonarQube: 'sonar-sc'      # ✅ Your service connection name
+        SonarQube: 'sonar-local'
         scannerMode: 'CLI'
         configMode: 'manual'
         cliProjectKey: 'e-shop'
         cliProjectName: 'e-shop'
         cliSources: '.'
-        extraProperties: |
-          sonar.branch.name=
 
-    # ✅ Run scanner directly as script to prevent branch injection
+    # ✅ Find the correct sonar-scanner path then run it
     - script: |
-        $(Agent.BuildDirectory)/sonar-scanner/bin/sonar-scanner \
+        echo "=== Finding sonar-scanner ==="
+        find /home/azureuser/eshop-agent/_work/_tasks -name "sonar-scanner" -type f 2>/dev/null
+        find /home/azureuser/eshop-agent/_work -name "sonar-scanner" -type f 2>/dev/null
+
+        echo "=== Running sonar-scanner ==="
+        SCANNER=$(find /home/azureuser/eshop-agent/_work/_tasks -name "sonar-scanner" -type f | head -1)
+        echo "Scanner found at: $SCANNER"
+
+        $SCANNER \
           -Dsonar.projectKey=e-shop \
           -Dsonar.projectName=e-shop \
           -Dsonar.sources=. \
