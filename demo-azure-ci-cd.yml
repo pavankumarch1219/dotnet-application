@@ -1,4 +1,3 @@
-```yaml
 trigger:
 - main
 
@@ -150,4 +149,3 @@ stages:
 
         echo "===== INGRESS ====="
         kubectl get ingress -n $(namespace)
-```
