@@ -1,3 +1,4 @@
+```yaml
 trigger:
 - main
 
@@ -16,17 +17,58 @@ variables:
 - name: imageTag
   value: latest
 
-
 stages:
+
+# =========================
+# 🔍 SONARQUBE ANALYSIS (CLI MODE)
+# =========================
+- stage: SonarQube
+  displayName: Code Quality Check
+  jobs:
+  - job: SonarJob
+    steps:
+
+    # ✅ Checkout code
+    - checkout: self
+
+    # ✅ Install Sonar Scanner (fix common issues)
+    - task: SonarQubeToolInstaller@1
+
+    # ✅ Prepare SonarQube (CLI mode)
+    - task: SonarQubePrepare@7
+      inputs:
+        SonarQube: 'sonar-local'
+        scannerMode: 'CLI'
+        configMode: 'manual'
+        cliProjectKey: 'eshop-project'
+        cliProjectName: 'eshop-project'
+        cliSources: '.'
+
+    # ✅ Build project (recommended)
+    - script: dotnet build
+      displayName: Build Project
+
+    # ✅ Run analysis
+    - task: SonarQubeAnalyze@7
+
+    # ✅ Publish Quality Gate
+    - task: SonarQubePublish@7
+      inputs:
+        pollingTimeoutSec: '300'
+
 
 # =========================
 # 🐳 DOCKER BUILD & PUSH
 # =========================
 - stage: Docker
   displayName: Build & Push Images
+  dependsOn: SonarQube
+  condition: succeeded()
   jobs:
   - job: DockerJob
     steps:
+
+    - checkout: self
 
     - script: |
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
@@ -38,20 +80,20 @@ stages:
     - script: |
         set -e
 
-        docker build -t $(dockerRepo)/catalog-api:latest -f src/Catalog.API/Dockerfile .
-        docker push $(dockerRepo)/catalog-api:latest
+        docker build -t $(dockerRepo)/catalog-api:$(imageTag) -f src/Catalog.API/Dockerfile .
+        docker push $(dockerRepo)/catalog-api:$(imageTag)
 
-        docker build -t $(dockerRepo)/basket-api:latest -f src/Basket.API/Dockerfile .
-        docker push $(dockerRepo)/basket-api:latest
+        docker build -t $(dockerRepo)/basket-api:$(imageTag) -f src/Basket.API/Dockerfile .
+        docker push $(dockerRepo)/basket-api:$(imageTag)
 
-        docker build -t $(dockerRepo)/identity-api:latest -f src/Identity.API/Dockerfile .
-        docker push $(dockerRepo)/identity-api:latest
+        docker build -t $(dockerRepo)/identity-api:$(imageTag) -f src/Identity.API/Dockerfile .
+        docker push $(dockerRepo)/identity-api:$(imageTag)
 
-        docker build -t $(dockerRepo)/ordering-api:latest -f src/Ordering.API/Dockerfile .
-        docker push $(dockerRepo)/ordering-api:latest
+        docker build -t $(dockerRepo)/ordering-api:$(imageTag) -f src/Ordering.API/Dockerfile .
+        docker push $(dockerRepo)/ordering-api:$(imageTag)
 
-        docker build -t $(dockerRepo)/dotnet-application:latest -f src/WebApp/Dockerfile .
-        docker push $(dockerRepo)/dotnet-application:latest
+        docker build -t $(dockerRepo)/dotnet-application:$(imageTag) -f src/WebApp/Dockerfile .
+        docker push $(dockerRepo)/dotnet-application:$(imageTag)
 
       displayName: Build & Push Docker Images
 
@@ -65,6 +107,8 @@ stages:
   jobs:
   - job: DeployJob
     steps:
+
+    - checkout: self
 
     - script: kubectl version --client
 
@@ -98,7 +142,7 @@ stages:
         kubectl rollout status deployment/rabbitmq -n $(namespace) --timeout=300s
 
     # =========================
-    # 🔴 REDIS (NEW - IMPORTANT)
+    # 🔴 REDIS
     # =========================
     - script: kubectl apply -f k8s/redis-deployment.yaml -n $(namespace)
 
@@ -136,3 +180,4 @@ stages:
 
         echo "===== INGRESS ====="
         kubectl get ingress -n $(namespace)
+```
