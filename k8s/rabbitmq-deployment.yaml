@@ -1,5 +1,5 @@
 # =========================
-# 🐰 RABBITMQ SERVICE
+#  RABBITMQ SERVICE
 # =========================
 apiVersion: v1
 kind: Service
@@ -26,7 +26,7 @@ spec:
 
 ---
 # =========================
-# 🐰 RABBITMQ DEPLOYMENT
+#  RABBITMQ DEPLOYMENT
 # =========================
 apiVersion: apps/v1
 kind: Deployment
@@ -56,14 +56,14 @@ spec:
             - containerPort: 15672
 
           env:
-            # ✅ USE CUSTOM USER (IMPORTANT)
+            #  USE CUSTOM USER (IMPORTANT)
             - name: RABBITMQ_DEFAULT_USER
               value: admin
 
             - name: RABBITMQ_DEFAULT_PASS
               value: StrongPassword123!
 
-            # ✅ DEFAULT VHOST
+            #  DEFAULT VHOST
             - name: RABBITMQ_DEFAULT_VHOST
               value: /
 
@@ -75,21 +75,21 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
-          # ✅ STARTUP PROBE
+          #  STARTUP PROBE
           startupProbe:
             tcpSocket:
               port: 5672
             failureThreshold: 30
             periodSeconds: 5
 
-          # ✅ READINESS PROBE
+          #  READINESS PROBE
           readinessProbe:
             tcpSocket:
               port: 5672
             initialDelaySeconds: 20
             periodSeconds: 10
 
-          # ✅ LIVENESS PROBE
+          #  LIVENESS PROBE
           livenessProbe:
             tcpSocket:
               port: 5672
