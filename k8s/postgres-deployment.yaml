@@ -1,5 +1,5 @@
 # =========================
-# 🐘 POSTGRES SERVICE
+#  POSTGRES SERVICE
 # =========================
 apiVersion: v1
 kind: Service
@@ -22,7 +22,7 @@ spec:
 
 ---
 # =========================
-# 🐘 POSTGRES INIT CONFIGMAP (SAFE)
+#  POSTGRES INIT CONFIGMAP (SAFE)
 # =========================
 apiVersion: v1
 kind: ConfigMap
@@ -53,7 +53,7 @@ data:
 
 ---
 # =========================
-# 🐘 POSTGRES DEPLOYMENT
+#  POSTGRES DEPLOYMENT
 # =========================
 apiVersion: apps/v1
 kind: Deployment
@@ -97,7 +97,7 @@ spec:
                   name: app-secret
                   key: POSTGRES_PASSWORD
 
-            # ✅ IMPORTANT FIX
+            #  IMPORTANT FIX
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
 
@@ -105,7 +105,7 @@ spec:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data
 
-            # ✅ INIT SCRIPT MOUNT
+            #  INIT SCRIPT MOUNT
             - name: postgres-init
               mountPath: /docker-entrypoint-initdb.d
 
@@ -117,21 +117,21 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
-          # ✅ STARTUP PROBE
+          #  STARTUP PROBE
           startupProbe:
             exec:
               command: ["pg_isready", "-U", "postgres"]
             failureThreshold: 30
             periodSeconds: 5
 
-          # ✅ READINESS PROBE
+          #  READINESS PROBE
           readinessProbe:
             exec:
               command: ["pg_isready", "-U", "postgres"]
             initialDelaySeconds: 20
             periodSeconds: 10
 
-          # ✅ LIVENESS PROBE
+          #  LIVENESS PROBE
           livenessProbe:
             exec:
               command: ["pg_isready", "-U", "postgres"]
@@ -139,7 +139,7 @@ spec:
             periodSeconds: 15
 
       volumes:
-        # ⚠️ DEV STORAGE (OK for you)
+        #  DEV STORAGE (OK for you)
         - name: postgres-storage
           emptyDir: {}
 
